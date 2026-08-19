@@ -79,7 +79,9 @@ def _zip_and_member(stem: str) -> tuple[zipfile.ZipFile | None, Any | None]:
     if len(zips) > 1:
         raise ValueError(f"multiple dataset zip files found: {[p.name for p in zips]}")
     if not zips:
-        matches = sorted(p for p in DATASET_DIR.rglob("*.csv") if p.stem.lower() == stem.lower())
+        matches = sorted(
+            p for p in DATASET_DIR.rglob("*.csv") if p.stem.lower() == stem.lower()
+        )
         if len(matches) > 1:
             raise ValueError(f"multiple {stem}.csv candidates found: {[str(p) for p in matches]}")
         if not matches:
@@ -131,14 +133,24 @@ def _stratified_holdout(frame: pd.DataFrame, target: str, fraction: float, seed:
     counts = frame[target].value_counts()
     if counts.size < 2 or int(counts.min()) < 2:
         raise ValueError("every class needs at least 2 usable rows for a stratified validation split")
-    train, val = train_test_split(frame, test_size=fraction, random_state=seed, stratify=frame[target])
+    train, val = train_test_split(
+        frame,
+        test_size=fraction,
+        random_state=seed,
+        stratify=frame[target],
+    )
     return train.reset_index(drop=True), val.reset_index(drop=True)
 
 
 def _stratified_cap(frame: pd.DataFrame, target: str, cap: int, seed: int) -> pd.DataFrame:
     if len(frame) <= cap:
         return frame.reset_index(drop=True)
-    selected, _ = train_test_split(frame, train_size=cap, random_state=seed, stratify=frame[target])
+    selected, _ = train_test_split(
+        frame,
+        train_size=cap,
+        random_state=seed,
+        stratify=frame[target],
+    )
     return selected.reset_index(drop=True)
 
 
@@ -284,8 +296,13 @@ def run() -> int:
     val_metrics = _classification_metrics(model, val, target)
     test_metrics = _classification_metrics(model, test, target) if test is not None and len(test) else None
 
+    # Build a portable inference artifact: fine-tuned checkpoint + the ICL context table.
     context_path = artifact_dir / "training_context.parquet"
     train.to_parquet(context_path, index=False)
+    checkpoint_sha256 = _sha256(best_ckpt)
+    training_context_sha256 = _sha256(context_path)
+    # artifact.json is the complete inference contract: everything a serving
+    # process needs to rebuild the exact model that produced the reported metrics.
     manifest = {
         "artifactFormat": "tabicl-dimer-classifier-v1",
         "checkpoint": "checkpoints/best.ckpt",
@@ -294,22 +311,46 @@ def run() -> int:
         "featureColumns": feature_columns,
         "baseCheckpoint": BASE_MODEL,
         "tabiclVersion": TABICL_VERSION,
-        "reload": "TabICLClassifier(model_path=best.ckpt); fit(X_context, y_context); predict(X)",
+        "inference": {
+            "class": "TabICLClassifier",
+            "modelPath": "checkpoints/best.ckpt",
+            "nEstimators": n_inf,
+            "randomState": seed,
+            "device": "cuda",
+            "supportManyClasses": True,
+            "allowAutoDownload": False,
+            "procedure": (
+                "TabICLClassifier(model_path, **inference); "
+                "fit(context[featureColumns], context[targetColumn]); "
+                "predict(X[featureColumns])"
+            ),
+        },
+        "digests": {
+            "checkpointSha256": checkpoint_sha256,
+            "trainingContextSha256": training_context_sha256,
+        },
     }
     (artifact_dir / "artifact.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
+    # Prove the artifact is a self-contained inference contract: reconstruct the
+    # model using ONLY artifact.json + the context table, then predict.
+    served = json.loads((artifact_dir / "artifact.json").read_text(encoding="utf-8"))
+    inference = served["inference"]
+    context = pd.read_parquet(artifact_dir / served["trainingContext"])
+    ctx_features = context[served["featureColumns"]]
+    ctx_target = context[served["targetColumn"]]
     reloaded = TabICLClassifier(
-        model_path=str(best_ckpt),
-        allow_auto_download=False,
-        n_estimators=n_inf,
-        random_state=seed,
-        device="cuda",
-        support_many_classes=True,
+        model_path=str(artifact_dir / inference["modelPath"]),
+        allow_auto_download=inference["allowAutoDownload"],
+        n_estimators=inference["nEstimators"],
+        random_state=inference["randomState"],
+        device=inference["device"],
+        support_many_classes=inference["supportManyClasses"],
     )
-    reloaded.fit(X_train, y_train)
+    reloaded.fit(ctx_features, ctx_target)
     smoke_rows = min(8, len(val))
     if smoke_rows:
-        _ = reloaded.predict(X_val.iloc[:smoke_rows])
+        _ = reloaded.predict(X_val[served["featureColumns"]].iloc[:smoke_rows])
 
     # Keep only best.ckpt in the served artifact; drop intermediate epoch checkpoints.
     pruned_bytes = 0
@@ -339,7 +380,11 @@ def run() -> int:
         "provenance": {
             "baseModel": BASE_MODEL,
             "tabiclVersion": TABICL_VERSION,
-            "fineTunedCheckpointSha256": _sha256(best_ckpt),
+            "fineTunedCheckpointSha256": checkpoint_sha256,
+            "trainingContextSha256": training_context_sha256,
+            "artifactDigestSha256": hashlib.sha256(
+                (checkpoint_sha256 + training_context_sha256).encode("utf-8")
+            ).hexdigest(),
             "dataset": _dataset_digest(),
         },
         "metadata": {
