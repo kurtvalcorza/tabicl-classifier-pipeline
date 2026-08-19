@@ -65,13 +65,15 @@ def notify_done_callback() -> dict[str, Any]:
 def _normalize_member(name: str) -> str | None:
     if not name or name.endswith("/"):
         return None
-    normalized = name.replace("\\", "/").lstrip("./")
+    normalized = name.replace("\\", "/")
     parts = Path(normalized).parts
-    if any(part == ".." for part in parts):
+    # Reject absolute paths and parent-directory traversal BEFORE stripping
+    # anything (Path() has already collapsed any leading "./").
+    if normalized.startswith("/") or ".." in parts:
         raise ValueError(f"unsafe archive member: {name}")
     if len(parts) > 1 and parts[0].lower() in {"dataset", "datasets"}:
-        normalized = str(Path(*parts[1:]))
-    return normalized
+        parts = parts[1:]
+    return "/".join(parts) if parts else None
 
 
 def _zip_and_member(stem: str) -> tuple[zipfile.ZipFile | None, Any | None]:
@@ -183,6 +185,12 @@ def _stratified_holdout(frame: pd.DataFrame, target: str, fraction: float, seed:
 def _stratified_cap(frame: pd.DataFrame, target: str, cap: int, seed: int) -> pd.DataFrame:
     if len(frame) <= cap:
         return frame.reset_index(drop=True)
+    n_classes = int(frame[target].nunique())
+    if cap < n_classes:
+        raise ValueError(
+            f"max_train_rows={cap} is below the class count ({n_classes}); "
+            "cannot draw a stratified sample that represents every class"
+        )
     selected, _ = train_test_split(
         frame,
         train_size=cap,
@@ -195,6 +203,8 @@ def _stratified_cap(frame: pd.DataFrame, target: str, cap: int, seed: int) -> pd
 def _prepare_frames(pre: dict[str, Any], seed: int) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None, str, list[str]]:
     target = str(pre.get("target_column") or "target").strip()
     drop_columns = [c.strip() for c in str(pre.get("drop_columns") or "").split(",") if c.strip()]
+    if target in drop_columns:
+        raise ValueError(f"target_column {target!r} must not appear in drop_columns")
     validation_split = float(pre.get("validation_split") if pre.get("validation_split") is not None else 0.2)
     max_train_rows = int(pre.get("max_train_rows") or 10_000)
     max_train_rows = max(300, min(max_train_rows, 50_000))
