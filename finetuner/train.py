@@ -19,6 +19,11 @@ from sklearn.model_selection import train_test_split
 
 TEMPLATE_NAME = "tabicl-classifier-finetuner"
 BASE_MODEL = "tabicl-classifier-v2-20260212.ckpt"
+BASE_MODEL_REPO = "jingang/TabICL"
+# Pin the base checkpoint by HF revision + SHA-256 so fine-tuning never silently
+# picks up a moved "main". Overridable for a future base-model bump.
+BASE_MODEL_REVISION = os.getenv("DIMER_BASE_MODEL_REVISION", "4dcd344ece2c00be9e831fdd35bed57b5ad83e19")
+BASE_MODEL_SHA256 = "bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0"
 TABICL_VERSION = "2.1.1"
 DATASET_DIR = Path(os.getenv("DIMER_DATASET_DIR", "/data/dataset"))
 OUTPUT_DIR = Path(os.getenv("DIMER_OUTPUT_DIR", "/data/output"))
@@ -313,6 +318,22 @@ def run() -> int:
 
     from tabicl import FinetunedTabICLClassifier, TabICLClassifier
 
+    # Resolve the base checkpoint deterministically: the baked, revision-pinned
+    # copy if present, else a pinned-revision download. Verify its SHA-256, then
+    # fine-tune from the local file with auto-download disabled.
+    from huggingface_hub import hf_hub_download
+    baked = os.getenv("DIMER_BASE_MODEL_PATH", "").strip()
+    if baked and Path(baked).exists():
+        base_ckpt = Path(baked)
+    else:
+        base_ckpt = Path(hf_hub_download(BASE_MODEL_REPO, BASE_MODEL, revision=BASE_MODEL_REVISION))
+    base_model_sha256 = _sha256(base_ckpt)
+    if base_model_sha256 != BASE_MODEL_SHA256:
+        raise RuntimeError(
+            f"base checkpoint sha256 {base_model_sha256} does not match the pinned "
+            f"{BASE_MODEL_SHA256} at revision {BASE_MODEL_REVISION}"
+        )
+
     epochs = int(hp.get("epochs") or 30)
     learning_rate = float(hp.get("learning_rate") or 1e-5)
     weight_decay = float(hp.get("weight_decay") if hp.get("weight_decay") is not None else 0.01)
@@ -341,7 +362,8 @@ def run() -> int:
         patience=patience,
         time_limit=time_limit,
         eval_metric=eval_metric,
-        checkpoint_version=BASE_MODEL,
+        model_path=str(base_ckpt),
+        allow_auto_download=False,
         device="cuda",
         random_state=seed,
         verbose=True,
@@ -370,6 +392,8 @@ def run() -> int:
         "targetColumn": target,
         "featureColumns": feature_columns,
         "baseCheckpoint": BASE_MODEL,
+        "baseModelRevision": BASE_MODEL_REVISION,
+        "baseModelSha256": base_model_sha256,
         "tabiclVersion": TABICL_VERSION,
         "inference": {
             "class": "TabICLClassifier",
@@ -443,6 +467,8 @@ def run() -> int:
         },
         "provenance": {
             "baseModel": BASE_MODEL,
+            "baseModelRevision": BASE_MODEL_REVISION,
+            "baseModelSha256": base_model_sha256,
             "tabiclVersion": TABICL_VERSION,
             "fineTunedCheckpointSha256": checkpoint_sha256,
             "trainingContextSha256": training_context_sha256,
