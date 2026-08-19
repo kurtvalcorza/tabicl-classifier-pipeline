@@ -8,7 +8,9 @@ A DIMER pipeline that fine-tunes **TabICLv2** for tabular classification using `
 |---|---|---|
 | Validator | `tabicl-classifier-dataset-validator` | CPU |
 | Fine-tuner | `tabicl-classifier-finetuner` | CUDA GPU |
-| Umbrella | `tabicl-classifier-pipeline` | Docs + mirrored source |
+| Umbrella | `tabicl-classifier-pipeline` | Docs + contracts |
+
+This umbrella repository holds the authoritative dataset contract, DIMER field manifest (`dimer-pipeline.json`), and deployment/serving notes. Deployable source lives in the two sibling repositories above.
 
 ## Dataset contract
 
