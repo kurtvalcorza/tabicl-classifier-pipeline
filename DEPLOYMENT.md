@@ -50,10 +50,10 @@ So a DIMER-selected Base Model deterministically controls the checkpoint actuall
 1. Build both repository images through DIMER.
 2. Confirm validator pass/fail behavior on valid and adversarial sample archives (duplicate splits, nested/zip-bomb archives, path traversal, `target_column` in `drop_columns`, malformed runtime config).
 3. Run a GPU fine-tune smoke test.
-4. Confirm `best.ckpt` exists and the built-in reload smoke test — which reconstructs the model **from `artifact.json` alone** — succeeds.
-5. Confirm `result.json` records validation metrics, fine-tuned checkpoint SHA-256, training-context SHA-256, and exact base-model provenance (revision + SHA-256 + source).
+4. Confirm `best.ckpt` exists and the built-in reload smoke test — which reconstructs the model **from `artifact.json` plus its referenced files** (`checkpoints/best.ckpt`, `training_context.parquet`) — succeeds.
+5. Confirm `result.json` records validation metrics, fine-tuned checkpoint SHA-256, training-context SHA-256, exact base-model provenance (revision + SHA-256 + source), and the input **dataset digest** (`provenance.dataset`).
 6. Supply `test.csv` and confirm test metrics are reported but do not influence checkpoint selection.
-7. **End-to-end serving acceptance (on-platform):** BYOD upload → validator → GPU fine-tune → artifact persistence/download → fresh-environment reload/predict, then DIMER deployment → API inference whose predictions **match the offline reload** on a shared sample.
+7. **End-to-end serving acceptance (on-platform):** BYOD upload → validator → GPU fine-tune → artifact persistence/download → fresh-environment reload, then DIMER deployment → API inference. On a shared sample, compare both `predict` **and `predict_proba`** (including class ordering) across the training instance, the offline reload, and the API — they must all agree, so the served artifact reproduces the exact model whose metrics `result.json` reports.
 8. Confirm each `dimer-pipeline.json` control changes the intended runtime behavior (spot-check e.g. `n_estimators_inference`, `seed`, `eval_metric`).
 9. Load-test representative row/feature counts and set the production GPU/RAM profile from measured peak usage.
 
