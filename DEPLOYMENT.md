@@ -29,15 +29,24 @@ The inference service must load `best.ckpt`, reconstruct `X_context`/`y_context`
 
 Because the artifact intentionally contains the training context, treat the artifact with the same data-governance controls as the source training dataset.
 
-## Pre-enable checklist
+`artifact.json` is the complete inference contract: it carries the target and feature-column ordering, the `inference` block (class, `nEstimators`, `randomState`, device, `allowAutoDownload`, `supportManyClasses`), the persisted `categoricalEncoders`, and component `digests`. A fresh-environment loader must be able to reconstruct the exact scored model from `artifact.json` plus the referenced files, with no additional configuration.
+
+## Base model handoff
+
+This pipeline is **fixed to the pinned TabICLv2 classifier checkpoint** `tabicl-classifier-v2-20260212.ckpt` at Hugging Face revision `4dcd344ece2c00be9e831fdd35bed57b5ad83e19`, SHA-256-verified at fine-tune time. The finetuner records `baseModelRevision`, `baseModelSha256`, `baseModelSource`, and `baseMatchesPinned` in `result.json` and `artifact.json`.
+
+DIMER's Workbench **Base Model selector overrides** the default: DIMER mounts the selected checkpoint into the fine-tuner container and sets `DIMER_BASE_MODEL_PATH` to it. A provided checkpoint is used as-is with its SHA-256 recorded (`baseModelSource: "provided-path"`); only the pinned default is hard-verified against the expected SHA-256 (`baseModelSource: "pinned-download"`). `model_id` is intentionally **not** a `dimer-pipeline.json` hyperparameter — every declared manifest key maps one-to-one to runtime behavior.
+
+## Pre-enable checklist (release gate)
 
 1. Build both repository images through DIMER.
-2. Confirm validator pass/fail behavior on valid and adversarial sample archives.
+2. Confirm validator pass/fail behavior on valid and adversarial sample archives (duplicate splits, nested/zip-bomb archives, path traversal, `target_column` in `drop_columns`, malformed runtime config).
 3. Run a GPU fine-tune smoke test.
-4. Confirm `best.ckpt` exists and the built-in reload smoke test succeeds.
-5. Confirm `result.json` contains validation metrics, checkpoint SHA-256, and dataset digest.
+4. Confirm `best.ckpt` exists and the built-in reload smoke test — which reconstructs the model **from `artifact.json` alone** — succeeds.
+5. Confirm `result.json` records validation metrics, fine-tuned checkpoint SHA-256, training-context SHA-256, and exact base-model provenance (revision + SHA-256 + source).
 6. Supply `test.csv` and confirm test metrics are reported but do not influence checkpoint selection.
-7. Verify the DIMER inference-serving layer can reconstruct and serve the custom TabICL artifact.
-8. Load-test representative row/feature counts and set the production GPU/RAM profile from measured peak usage.
+7. **End-to-end serving acceptance (on-platform):** BYOD upload → validator → GPU fine-tune → artifact persistence/download → fresh-environment reload/predict, then DIMER deployment → API inference whose predictions **match the offline reload** on a shared sample.
+8. Confirm each `dimer-pipeline.json` control changes the intended runtime behavior (spot-check e.g. `n_estimators_inference`, `seed`, `eval_metric`).
+9. Load-test representative row/feature counts and set the production GPU/RAM profile from measured peak usage.
 
 Do not production-enable the pipeline until step 7 is verified on-platform.
