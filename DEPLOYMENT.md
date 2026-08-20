@@ -33,9 +33,17 @@ Because the artifact intentionally contains the training context, treat the arti
 
 ## Base model handoff
 
-This pipeline is **fixed to the pinned TabICLv2 classifier checkpoint** `tabicl-classifier-v2-20260212.ckpt` at Hugging Face revision `4dcd344ece2c00be9e831fdd35bed57b5ad83e19`, SHA-256-verified at fine-tune time. The finetuner records `baseModelRevision`, `baseModelSha256`, `baseModelSource`, and `baseMatchesPinned` in `result.json` and `artifact.json`.
+This pipeline is **fixed to the pinned TabICLv2 classifier checkpoint** `tabicl-classifier-v2-20260212.ckpt` at Hugging Face revision `4dcd344ece2c00be9e831fdd35bed57b5ad83e19`, baked into the image and SHA-256-verified at fine-tune time. The finetuner records `baseModelRevision`, `baseModelSha256`, `baseModelSource`, and `baseMatchesPinned` in `result.json` and `artifact.json`.
 
-DIMER's Workbench **Base Model selector overrides** the default: DIMER mounts the selected checkpoint into the fine-tuner container and sets `DIMER_BASE_MODEL_PATH` to it. A provided checkpoint is used as-is with its SHA-256 recorded (`baseModelSource: "provided-path"`); only the pinned default is hard-verified against the expected SHA-256 (`baseModelSource: "pinned-download"`). `model_id` is intentionally **not** a `dimer-pipeline.json` hyperparameter — every declared manifest key maps one-to-one to runtime behavior.
+Resolution precedence and provenance are exact:
+
+| `baseModelSource` | when | verification | `baseModelRevision` |
+|---|---|---|---|
+| `dimer-provided` | `DIMER_BASE_MODEL_PATH` is set (DIMER operator override) | **must exist** — a configured-but-missing path fails the run; used as-is, SHA-256 recorded | pinned revision only if the bytes match the pinned default, else `null` |
+| `pinned-baked` | default — the checkpoint baked into the image (`TABICL_BAKED_BASE_MODEL`) | SHA-256 hard-verified against the pinned value | pinned revision |
+| `pinned-download` | no baked copy present | downloaded at the pinned revision, SHA-256 hard-verified | pinned revision |
+
+So a DIMER-selected Base Model deterministically controls the checkpoint actually loaded (no silent fallback to the default), and a custom base never falsely claims the pinned revision. `model_id` is intentionally **not** a `dimer-pipeline.json` hyperparameter — every declared manifest key maps one-to-one to runtime behavior.
 
 ## Pre-enable checklist (release gate)
 
