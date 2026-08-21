@@ -2,14 +2,19 @@
 
 ## DIMER components
 
-- Validator: `tabicl-classifier-dataset-validator`, CPU image.
-- Fine-tuner: `tabicl-classifier-finetuner`, CUDA image.
+- Validator: `tabicl-classifier-dataset-validator`, CPU image; DIMER entrypoint `validate.py`.
+- Fine-tuner: `tabicl-classifier-finetuner`, CUDA image; DIMER entrypoint `train.py`.
 - Base checkpoint: `tabicl-classifier-v2-20260212.ckpt`.
 - Python package: `tabicl[finetune]==2.1.1`.
 
+Both deployable repositories build with the **repository root as the Docker build context** and expose their DIMER entrypoint at the repository root (`validate.py` for the validator, `train.py` for the fine-tuner). The fine-tuner also keeps `dimer-pipeline.json` at the repository root. `model_id` is intentionally not a manifest parameter — the DIMER Base Model selection is authoritative.
+
 ## Network
 
-The first fine-tuning run downloads the upstream TabICLv2 checkpoint unless it is already cached or baked into the image. Production deployments should either permit the required model-download egress or bake/cache the checkpoint and validate its provenance.
+Distinguish **build-time** egress from **runtime** egress — the default path needs the former but not the latter:
+
+- **Build-time (required by default):** the fine-tuner image bakes the pinned TabICLv2 checkpoint by calling `hf_hub_download` during the Docker build (see *Base model handoff*), so building the default image **requires Hugging Face egress at build time**. A clean or network-restricted DIMER builder must permit this build-time access, or the image build fails. Do not disable build-time egress on the assumption that the baked image is fully offline-buildable.
+- **Runtime (not required by default):** once baked, the default `pinned-baked` path performs **no runtime download**. Runtime model-download egress is only needed for the `pinned-download` fallback (no baked copy present) or to re-validate provenance against Hugging Face. A DIMER-provided base (`DIMER_BASE_MODEL_PATH`) is read from the mounted path and needs no egress at either stage.
 
 ## GPU
 
