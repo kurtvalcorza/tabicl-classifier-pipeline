@@ -2,14 +2,16 @@
 
 ## DIMER components
 
-- Validator: `tabicl-classifier-dataset-validator`, CPU image.
-- Fine-tuner: `tabicl-classifier-finetuner`, CUDA image.
+- Validator: `tabicl-classifier-dataset-validator`, CPU image; DIMER entrypoint `validate.py`.
+- Fine-tuner: `tabicl-classifier-finetuner`, CUDA image; DIMER entrypoint `train.py`.
 - Base checkpoint: `tabicl-classifier-v2-20260212.ckpt`.
 - Python package: `tabicl[finetune]==2.1.1`.
 
+Both deployable repositories build with the **repository root as the Docker build context** and expose their DIMER entrypoint at the repository root (`validate.py` for the validator, `train.py` for the fine-tuner). The fine-tuner also keeps `dimer-pipeline.json` at the repository root. `model_id` is intentionally not a manifest parameter — the DIMER Base Model selection is authoritative.
+
 ## Network
 
-The first fine-tuning run downloads the upstream TabICLv2 checkpoint unless it is already cached or baked into the image. Production deployments should either permit the required model-download egress or bake/cache the checkpoint and validate its provenance.
+The fine-tuner image **bakes** the pinned TabICLv2 checkpoint at build time (see *Base model handoff*), so the default `pinned-baked` path performs **no runtime download**. Model-download egress is only needed for the `pinned-download` fallback (no baked copy present) or to re-validate provenance against Hugging Face. A DIMER-provided base (`DIMER_BASE_MODEL_PATH`) is read from the mounted path and also needs no egress.
 
 ## GPU
 
