@@ -11,7 +11,10 @@ Both deployable repositories build with the **repository root as the Docker buil
 
 ## Network
 
-The fine-tuner image **bakes** the pinned TabICLv2 checkpoint at build time (see *Base model handoff*), so the default `pinned-baked` path performs **no runtime download**. Model-download egress is only needed for the `pinned-download` fallback (no baked copy present) or to re-validate provenance against Hugging Face. A DIMER-provided base (`DIMER_BASE_MODEL_PATH`) is read from the mounted path and also needs no egress.
+Distinguish **build-time** egress from **runtime** egress — the default path needs the former but not the latter:
+
+- **Build-time (required by default):** the fine-tuner image bakes the pinned TabICLv2 checkpoint by calling `hf_hub_download` during the Docker build (see *Base model handoff*), so building the default image **requires Hugging Face egress at build time**. A clean or network-restricted DIMER builder must permit this build-time access, or the image build fails. Do not disable build-time egress on the assumption that the baked image is fully offline-buildable.
+- **Runtime (not required by default):** once baked, the default `pinned-baked` path performs **no runtime download**. Runtime model-download egress is only needed for the `pinned-download` fallback (no baked copy present) or to re-validate provenance against Hugging Face. A DIMER-provided base (`DIMER_BASE_MODEL_PATH`) is read from the mounted path and needs no egress at either stage.
 
 ## GPU
 
