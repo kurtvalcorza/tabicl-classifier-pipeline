@@ -10,7 +10,8 @@ pipeline can be enabled and served without a usage restriction on the model itse
 data carries its own licence — see [Data licence governs the served model](#data-licence-governs-the-served-model).
 
 For platform-administrator setup and operations — resource profiles, weights delivery, network
-egress, base-model handoff, and the release gate — see [DEPLOYMENT.md](DEPLOYMENT.md).
+egress, base-model handoff, and the release gate — see [DEPLOYMENT.md](DEPLOYMENT.md). Model
+provenance and adaptation details are in [MODEL_CARD.md](MODEL_CARD.md).
 
 ---
 
