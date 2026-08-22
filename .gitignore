@@ -1,0 +1,3 @@
+# Local TabICLv2 base checkpoint (~105MB) — never committed; baked into the
+# finetuner image from Hugging Face at build time, or kept here for a local bake.
+weights/
