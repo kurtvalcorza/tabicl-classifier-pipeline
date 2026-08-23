@@ -265,6 +265,37 @@ is **mandatory** — export-to-repository and model-download report *"No model a
 without it — and `trainingContext` (`training_context.parquet`) is the second file the in-context
 learner needs at serve time; `manifest`, `evaluationReport`, and `logArtifact` accompany them.
 
+```json
+{
+  "successful": true,
+  "message": "TabICLv2 fine-tuning succeeded on 4180 rows; validation accuracy 0.9123.",
+  "metrics": {
+    "trainRows": 4180,
+    "val":  { "rows": 1600, "accuracy": 0.9123, "logLoss": 0.2841, "rocAucOvr": 0.9705 },
+    "test": { "rows": 1600, "accuracy": 0.9050, "logLoss": 0.3012 },
+    "numClasses": 3, "featureCount": 17, "device": "cuda:0", "mode": "fine-tune"
+  },
+  "artifacts": {
+    "modelArtifact":    { "path": "fine-tuning/<run_id>/tabicl_classifier/checkpoints/best.ckpt",    "name": "best.ckpt",                "contentType": "application/octet-stream", "sizeBytes": 0 },
+    "trainingContext":  { "path": "fine-tuning/<run_id>/tabicl_classifier/training_context.parquet", "name": "training_context.parquet", "contentType": "application/octet-stream", "sizeBytes": 0 },
+    "manifest":         { "path": "fine-tuning/<run_id>/tabicl_classifier/artifact.json",            "name": "artifact.json",            "contentType": "application/json",         "sizeBytes": 0 },
+    "evaluationReport": { "path": "fine-tuning/<run_id>/tabicl_classifier/evaluation/report.json",   "name": "report.json",              "contentType": "application/json",         "sizeBytes": 0 },
+    "logArtifact":      { "path": "fine-tuning/<run_id>/tabicl_classifier/logs/run-summary.json",    "name": "run-summary.json",         "contentType": "application/json",         "sizeBytes": 0 }
+  },
+  "provenance": {
+    "baseModel": "tabicl-classifier-v2-20260212.ckpt",
+    "baseModelRevision": "4dcd344…", "baseModelSha256": "bdc7dbd5…",
+    "baseModelSource": "pinned-baked", "baseMatchesPinned": true,
+    "tabiclVersion": "2.1.1",
+    "fineTunedCheckpointSha256": "…", "trainingContextSha256": "…",
+    "dataset": { "file": "dataset.zip", "sha256": "…" }
+  },
+  "metadata": { "template": "tabicl-classifier-finetuner", "taskType": "tabular_classification", "targetColumn": "target", "seed": 0 }
+}
+```
+
+Numbers above are illustrative; see the model card for measured smoke-test values.
+
 TabICL remains an in-context model after downstream fine-tuning, so **inference needs both the
 fine-tuned checkpoint and the training context**. A fresh-environment loader reconstructs the
 exact scored model from `artifact.json` plus its referenced files, then fits and predicts:
