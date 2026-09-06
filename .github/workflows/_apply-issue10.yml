@@ -1,0 +1,36 @@
+name: Apply issue 10 notebook patch
+
+on:
+  push:
+    branches: [fix/issue-10-tutorial-hardening]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/issue-10-tutorial-hardening
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pandas numpy
+      - name: Apply patch
+        run: python scripts/_apply_issue10.py
+      - name: Validate tutorial hardening
+        run: |
+          python scripts/validate_colab_tutorial.py
+          python scripts/test_colab_csv_headers.py
+          python scripts/test_issue10_hardening.py
+      - name: Commit clean result
+        run: |
+          rm scripts/_apply_issue10.py .github/workflows/_apply-issue10.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: harden TabICLv2 classifier tutorial artifacts"
+          git push origin HEAD:fix/issue-10-tutorial-hardening
