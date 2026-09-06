@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  tutorial-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pandas numpy
+      - name: Standalone Colab tutorial
+        run: python scripts/validate_colab_tutorial.py
+      - name: Colab CSV header regressions
+        run: python scripts/test_colab_csv_headers.py
+      - name: Compile tutorial checks
+        run: python -m compileall -q scripts
