@@ -8,10 +8,10 @@
 
 These notebooks make the model usable outside DIMER Workbench while preserving the repository's pinned checkpoint identity and serving-artifact contract.
 
-| Notebook | Purpose |
-|---|---|
-| [`tabiclv2_classifier_colab.ipynb`](tabiclv2_classifier_colab.ipynb) | End-to-end tutorial: checkpoint → data → evaluation → optional fine-tuning → inference → portable bundle |
-| [`tabiclv2_classifier_artifact_inference_colab.ipynb`](tabiclv2_classifier_artifact_inference_colab.ipynb) | Load a trusted exported/DIMER-style bundle and run inference without gradient fine-tuning |
+| Notebook | Badge | Purpose |
+|---|---|---|
+| [`tabiclv2_classifier_colab.ipynb`](tabiclv2_classifier_colab.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_colab.ipynb) | End-to-end tutorial: checkpoint → data → evaluation → optional fine-tuning → inference → portable bundle |
+| [`tabiclv2_classifier_artifact_inference_colab.ipynb`](tabiclv2_classifier_artifact_inference_colab.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb) | Load a trusted exported/DIMER-style bundle and run inference without gradient fine-tuning |
 
 ## Main tutorial
 
