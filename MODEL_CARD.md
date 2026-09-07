@@ -11,6 +11,11 @@ base_model: jingang/TabICL
 
 # TabICLv2 Classifier
 
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-jingang%2FTabICL-ffcc4d?style=flat)](https://huggingface.co/jingang/TabICL)
+[![GitHub](https://img.shields.io/badge/GitHub-soda--inria%2Ftabicl-181717?style=flat&logo=github&logoColor=white)](https://github.com/soda-inria/tabicl)
+[![arXiv](https://img.shields.io/badge/arXiv-2602.11139-b31b1b.svg)](https://arxiv.org/abs/2602.11139)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
 ## Description
 
 TabICLv2 Classifier is a pretrained tabular foundation model developed by Jingang Qu, David Holzmüller, Gaël Varoquaux, and Marine Le Morvan of the Soda team at Inria.
@@ -26,7 +31,8 @@ The classifier is pretrained on synthetic classification tasks with up to 10 cla
 - **Model name:** TabICLv2 Classifier
 - **Model family:** TabICLv2
 - **Checkpoint identifier:** `tabicl-classifier-v2-20260212.ckpt`
-- **Hugging Face repository:** `jingang/TabICL`
+- **Code repository:** [soda-inria/tabicl](https://github.com/soda-inria/tabicl)
+- **Hugging Face repository:** [jingang/TabICL](https://huggingface.co/jingang/TabICL)
 - **Developers:** Jingang Qu, David Holzmüller, Gaël Varoquaux, Marine Le Morvan; Soda team, Inria
 - **Task:** tabular classification
 - **Learning paradigm:** in-context learning
@@ -41,7 +47,9 @@ The classifier is pretrained on synthetic classification tasks with up to 10 cla
 This card documents the following released TabICLv2 classification checkpoint.
 
 - **Checkpoint:** `tabicl-classifier-v2-20260212.ckpt`
+- **Hugging Face repository:** [`jingang/TabICL`](https://huggingface.co/jingang/TabICL)
 - **Pinned Hugging Face revision:** `4dcd344ece2c00be9e831fdd35bed57b5ad83e19`
+- **Direct download URL:** [`https://huggingface.co/jingang/TabICL/resolve/4dcd344ece2c00be9e831fdd35bed57b5ad83e19/tabicl-classifier-v2-20260212.ckpt`](https://huggingface.co/jingang/TabICL/resolve/4dcd344ece2c00be9e831fdd35bed57b5ad83e19/tabicl-classifier-v2-20260212.ckpt)
 - **SHA-256:** `bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0`
 
 The checkpoint hash and revision should be retained when exact model-version provenance is required. The classifier and regressor are separate pretrained checkpoints and should not be treated as interchangeable.
@@ -295,13 +303,61 @@ Downstream datasets and fine-tuned derivatives may carry additional licensing or
 
 ## Model Ownership and Attribution
 
-TabICLv2 was developed by Jingang Qu, David Holzmüller, Gaël Varoquaux, and Marine Le Morvan of the Soda team at Inria.
+TabICLv2 was developed by Jingang Qu, David Holzmüller, Gaël Varoquaux, and Marine Le Morvan of the Soda team at Inria. Upstream source code is maintained at [soda-inria/tabicl](https://github.com/soda-inria/tabicl) and base model checkpoints are hosted on Hugging Face at [jingang/TabICL](https://huggingface.co/jingang/TabICL).
 
 Downstream integrations and fine-tuned derivatives should distinguish their modifications from the upstream TabICLv2 checkpoint.
 
 ## Citation
 
-Qu, J., Holzmüller, D., Varoquaux, G., & Le Morvan, M. (2026). *TabICLv2: A better, faster, scalable, and open tabular foundation model.* ICML 2026. arXiv:2602.11139. https://doi.org/10.48550/arXiv.2602.11139
+Cite the TabICLv2 paper, the original TabICL foundation paper, and the upstream repository:
+
+### Papers
+
+- **TabICLv2 (2026):**  
+  Qu, J., Holzmüller, D., Varoquaux, G., & Le Morvan, M. (2026). *TabICLv2: A better, faster, scalable, and open tabular foundation model.* ICML 2026. arXiv:2602.11139. https://doi.org/10.48550/arXiv.2602.11139
+
+- **TabICL (2025):**  
+  Qu, J., Holzmüller, D., Varoquaux, G., & Le Morvan, M. (2025). *TabICL: A Tabular Foundation Model for In-Context Learning on Large Data.* ICML 2025. arXiv:2502.05564. https://doi.org/10.48550/arXiv.2502.05564
+
+### Upstream Repository
+
+- **TabICL Codebase:**  
+  Soda team, Inria. *TabICL: Open Tabular Foundation Models* [Software]. GitHub. https://github.com/soda-inria/tabicl
+
+### BibTeX
+
+```bibtex
+@article{qu2026tabiclv2,
+  title={{TabICLv2}: {A} better, faster, scalable, and open tabular foundation model},
+  author={Qu, Jingang and Holzm{\"u}ller, David and Varoquaux, Ga{\"e}l and Le Morvan, Marine},
+  journal={arXiv preprint arXiv:2602.11139},
+  year={2026}
+}
+
+@inproceedings{qu2025tabicl,
+  title={Tab{ICL}: {A} Tabular Foundation Model for In-Context Learning on Large Data},
+  author={Qu, Jingang and Holzm{\"u}ller, David and Varoquaux, Ga{\"e}l and Le Morvan, Marine},
+  booktitle={International Conference on Machine Learning},
+  year={2025}
+}
+
+@misc{tabicl_repo,
+  author = {Qu, Jingang and Holzm{\"u}ller, David and Varoquaux, Ga{\"e}l and Le Morvan, Marine},
+  title = {Tab{ICL}: Open Tabular Foundation Models},
+  year = {2025},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/soda-inria/tabicl}}
+}
+
+@misc{tabicl_hf,
+  author = {Qu, Jingang and Holzm{\"u}ller, David and Varoquaux, Ga{\"e}l and Le Morvan, Marine},
+  title = {{TabICL}: Open Tabular Foundation Models},
+  year = {2026},
+  publisher = {Hugging Face},
+  howpublished = {\url{https://huggingface.co/jingang/TabICL}}
+}
+```
 
 ## Evaluation Status
 
