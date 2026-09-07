@@ -20,6 +20,8 @@ These notebooks make the model usable outside DIMER Workbench while preserving t
 - Breast Cancer Wisconsin sample or BYOD CSV/pre-split data
 - pretrained in-context evaluation with accuracy, balanced accuracy, weighted F1, log loss, and ROC-AUC where defined
 - optional `FinetunedTabICLClassifier` CUDA fine-tuning
+- companion classical tree baselines (LightGBM and Random Forest) with holdout leaderboard and device latency
+- in-memory post-hoc probability blending with strict label alignment and generalization assessment
 - holdout-only artifact selection; independent test is evaluation only
 - many-class-compatible `predict()` / `predict_proba()` output
 - DIMER-style bundle export: checkpoint + training context + manifest
