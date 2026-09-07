@@ -8,10 +8,10 @@
 
 These notebooks make the model usable outside DIMER Workbench while preserving the repository's pinned checkpoint identity and serving-artifact contract.
 
-| Notebook | Purpose |
-|---|---|
-| [`tabiclv2_classifier_colab.ipynb`](tabiclv2_classifier_colab.ipynb) | End-to-end tutorial: checkpoint → data → evaluation → optional fine-tuning → inference → portable bundle |
-| [`tabiclv2_classifier_artifact_inference_colab.ipynb`](tabiclv2_classifier_artifact_inference_colab.ipynb) | Load a trusted exported/DIMER-style bundle and run inference without gradient fine-tuning |
+| Notebook | Badge | Purpose |
+|---|---|---|
+| [`tabiclv2_classifier_colab.ipynb`](tabiclv2_classifier_colab.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_colab.ipynb) | End-to-end tutorial: checkpoint → data → evaluation → optional fine-tuning → inference → portable bundle |
+| [`tabiclv2_classifier_artifact_inference_colab.ipynb`](tabiclv2_classifier_artifact_inference_colab.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb) | Load a trusted exported/DIMER-style bundle and run inference without gradient fine-tuning |
 
 ## Main tutorial
 
@@ -20,6 +20,8 @@ These notebooks make the model usable outside DIMER Workbench while preserving t
 - Breast Cancer Wisconsin sample or BYOD CSV/pre-split data
 - pretrained in-context evaluation with accuracy, balanced accuracy, weighted F1, log loss, and ROC-AUC where defined
 - optional `FinetunedTabICLClassifier` CUDA fine-tuning
+- companion classical tree baselines (LightGBM and Random Forest) with holdout leaderboard and device latency
+- in-memory post-hoc probability blending with strict label alignment and generalization assessment
 - holdout-only artifact selection; independent test is evaluation only
 - many-class-compatible `predict()` / `predict_proba()` output
 - DIMER-style bundle export: checkpoint + training context + manifest
