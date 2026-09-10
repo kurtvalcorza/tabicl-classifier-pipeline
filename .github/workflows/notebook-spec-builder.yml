@@ -1,0 +1,36 @@
+name: Notebook Spec Builder
+
+on:
+  push:
+    branches:
+      - fix/notebook-spec-v1
+    paths:
+      - scripts/apply_notebook_spec_v1.py
+      - .github/workflows/notebook-spec-builder.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/notebook-spec-v1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply notebook migration
+        run: python scripts/apply_notebook_spec_v1.py
+      - name: Commit generated notebook changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add tutorials/tabiclv2_classifier_colab.ipynb tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb
+            git commit -m "fix(tutorials): conform notebooks to spec v1.0"
+            git push origin HEAD:fix/notebook-spec-v1
+          else
+            echo "Notebook migration already applied."
+          fi
