@@ -17,7 +17,7 @@ MAIN = ROOT / "tutorials" / "tabiclv2_classifier_colab.ipynb"
 INFERENCE = ROOT / "tutorials" / "tabiclv2_classifier_artifact_inference_colab.ipynb"
 EVIDENCE_DIR = ROOT / "release-evidence"
 CONTENT_DIR = Path(
-    os.environ.get("NOTEBOOK_RELEASE_CONTENT_DIR", str(EVIDENCE_DIR / "content"))
+    os.environ.get("NOTEBOOK_RELEASE_CONTENT_DIR", str(ROOT / ".notebook-release-content"))
 ).resolve()
 COLAB_CONTENT_ROOT = "/content"
 ARTIFACT = CONTENT_DIR / "tabiclv2-classifier-artifact.zip"
