@@ -41,7 +41,11 @@ training_context.parquet
 artifact.json
 ```
 
-The inference-only notebook verifies the archive/member bounds, expected file set, internal digests and recorded sizes, reconstructs the support context, and calls the ordinary TabICL estimator with `allow_auto_download=False`.
+New tutorial exports record SHA-256 and byte size for the checkpoint and training context. The inference-only notebook enforces archive member/expanded-size ceilings, rejects ambiguous/traversal/symlink paths, verifies the required component digests and any recorded sizes, reconstructs the support context, and calls the ordinary TabICL estimator with `allow_auto_download=False`.
+
+### Legacy DIMER v1 compatibility
+
+The current DIMER fine-tuner can place side artifacts such as evaluation reports beside the three serving files, while its `tabicl-dimer-classifier-v1` manifest records the serving-file digests but not their byte sizes. To preserve compatibility with those already valid DIMER bundles, the companion notebook **warns rather than rejects** unexpected unlisted side files (a documented `SEC9` SHOULD deviation) and verifies per-file sizes only when a `sizes` block is present (a documented `SEC8` SHOULD deviation). Path safety, the global expanded-size ceiling, the required serving-file SHA-256 checks, artifact format/version validation, and the deserialization trust boundary remain mandatory. New bundles produced by the tutorial include component sizes.
 
 ## Trust boundary
 
