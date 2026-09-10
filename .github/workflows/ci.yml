@@ -11,8 +11,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install pandas numpy
-      - name: Standalone Colab tutorial
+      - run: pip install "pandas==3.0.5" "numpy==2.5.2"
+      - name: Standalone Colab tutorial static conformance
         run: python scripts/validate_colab_tutorial.py
       - name: Colab CSV header regressions
         run: python scripts/test_colab_csv_headers.py
@@ -20,3 +20,25 @@ jobs:
         run: python scripts/test_issue10_hardening.py
       - name: Compile tutorial checks
         run: python -m compileall -q scripts
+
+  notebook-release-execution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install clean-kernel executor
+        run: pip install -r requirements-notebook-ci.txt
+      - name: Execute E2E and artifact-inference release paths
+        env:
+          NOTEBOOK_RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python scripts/execute_notebook_release_paths.py
+      - name: Upload notebook release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notebook-release-evidence-${{ github.event.pull_request.head.sha }}
+          path: release-evidence/
+          if-no-files-found: warn
