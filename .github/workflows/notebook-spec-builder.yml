@@ -21,6 +21,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Normalize generated notebook text
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb')
+          nb = json.loads(path.read_text(encoding='utf-8'))
+          for cell in nb['cells']:
+              source = cell.get('source', '')
+              text = ''.join(source) if isinstance(source, list) else str(source)
+              if 'Remaining run-to-run variability' in text:
+                  cell['source'] = text.replace('Remaining run-to-run variability', 'The remaining run-to-run variability')
+          path.write_text(json.dumps(nb, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
       - name: Apply notebook migration
         run: python scripts/apply_notebook_spec_v1.py
       - name: Commit generated notebook changes
@@ -29,7 +43,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add tutorials/tabiclv2_classifier_colab.ipynb tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb
-            git commit -m "fix(tutorials): conform notebooks to spec v1.0"
+            git commit -m "fix(tutorials): normalize spec v1 conformance text"
             git push origin HEAD:fix/notebook-spec-v1
           else
             echo "Notebook migration already applied."
