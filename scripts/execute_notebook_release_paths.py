@@ -16,16 +16,21 @@ ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "tutorials" / "tabiclv2_classifier_colab.ipynb"
 INFERENCE = ROOT / "tutorials" / "tabiclv2_classifier_artifact_inference_colab.ipynb"
 EVIDENCE_DIR = ROOT / "release-evidence"
-CONTENT_DIR = Path("/content")
+CONTENT_DIR = Path(
+    os.environ.get("NOTEBOOK_RELEASE_CONTENT_DIR", str(EVIDENCE_DIR / "content"))
+).resolve()
+COLAB_CONTENT_ROOT = "/content"
 ARTIFACT = CONTENT_DIR / "tabiclv2-classifier-artifact.zip"
 INFERENCE_CSV = CONTENT_DIR / "tabiclv2_classifier_release_inference.csv"
 
-COMMON_COLAB_STUB = r'''
+
+def colab_stub(content_dir: Path) -> str:
+    return f'''
 from pathlib import Path
 import sys
 import types
 
-Path("/content").mkdir(parents=True, exist_ok=True)
+Path(r"{content_dir}").mkdir(parents=True, exist_ok=True)
 try:
     import google
 except ImportError:
@@ -40,7 +45,7 @@ class _ReleaseFiles:
         raise RuntimeError("Release harness did not configure an upload payload for this notebook stage")
 
     def download(self, path):
-        print(f"[release harness] download requested: {path}")
+        print(f"[release harness] download requested: {{path}}")
 
 _colab.files = _ReleaseFiles()
 setattr(google, "colab", _colab)
@@ -63,15 +68,20 @@ def execute_notebook(
     replacements: dict[str, str] | None = None,
 ) -> None:
     notebook = nbformat.read(source, as_version=4)
+    effective_replacements = {COLAB_CONTENT_ROOT: str(CONTENT_DIR)}
     if replacements:
-        for old, new in replacements.items():
-            replaced = False
-            for cell in notebook.cells:
-                if cell.cell_type == "code" and old in cell.source:
-                    cell.source = cell.source.replace(old, new)
-                    replaced = True
-            if not replaced:
-                raise RuntimeError(f"Could not apply release-harness replacement in {source.name}: {old!r}")
+        effective_replacements.update(replacements)
+
+    for old, new in effective_replacements.items():
+        replaced = old == COLAB_CONTENT_ROOT
+        for cell in notebook.cells:
+            if cell.cell_type == "code" and old in cell.source:
+                cell.source = cell.source.replace(old, new)
+                replaced = True
+        if not replaced:
+            raise RuntimeError(
+                f"Could not apply release-harness replacement in {source.name}: {old!r}"
+            )
 
     prep = nbformat.v4.new_code_cell(prep_source)
     prep.metadata["tags"] = ["release-harness"]
@@ -117,13 +127,19 @@ def main() -> None:
 
     evidence: dict[str, object] = {
         "notebookSpec": "1.0",
-        "revision": os.environ.get("NOTEBOOK_RELEASE_SHA") or os.environ.get("GITHUB_SHA") or "unknown",
+        "revision": os.environ.get("NOTEBOOK_RELEASE_SHA")
+        or os.environ.get("GITHUB_SHA")
+        or "unknown",
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
         "runner": {
             "platform": platform.platform(),
             "python": sys.version.split()[0],
         },
         "executionBoundary": "separate fresh Jupyter kernels",
+        "pathRemap": {
+            "notebookColabRoot": COLAB_CONTENT_ROOT,
+            "runnerWritableRoot": str(CONTENT_DIR),
+        },
         "profiles": {
             MAIN.name: "E2E",
             INFERENCE.name: "ARTIFACT-INFERENCE",
@@ -132,7 +148,7 @@ def main() -> None:
     }
 
     try:
-        execute_notebook(MAIN, main_output, COMMON_COLAB_STUB)
+        execute_notebook(MAIN, main_output, colab_stub(CONTENT_DIR))
         if not ARTIFACT.exists():
             raise RuntimeError(f"Main notebook did not produce expected artifact: {ARTIFACT}")
         artifact_sha256 = sha256_file(ARTIFACT)
@@ -145,7 +161,7 @@ def main() -> None:
         sample = load_breast_cancer(as_frame=True)
         sample.data.tail(8).to_csv(INFERENCE_CSV, index=False)
 
-        companion_prep = COMMON_COLAB_STUB + f'''
+        companion_prep = colab_stub(CONTENT_DIR) + f'''
 from pathlib import Path
 import google.colab
 
@@ -185,6 +201,7 @@ google.colab.files.upload = _release_upload
         evidence["notes"] = [
             "The default E2E path is exercised without optional gradient fine-tuning.",
             "The artifact-inference notebook consumes the producer artifact in a separate fresh kernel and scores a separate CSV upload.",
+            "The harness remaps Colab's /content path to a writable runner directory without changing notebook task semantics.",
             "GPU-only fine-tuning remains an optional branch and is not claimed by this CPU release execution record.",
         ]
         (EVIDENCE_DIR / "notebook-release-evidence.json").write_text(
