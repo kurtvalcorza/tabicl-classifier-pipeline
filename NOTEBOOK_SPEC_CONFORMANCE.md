@@ -14,6 +14,10 @@ This record applies to the release-grade tutorials in `tutorials/`.
 
 These deviations are retained specifically for compatibility with the existing DIMER v1 producer contract; they do not weaken traversal/symlink/containment checks or the checkpoint deserialization trust boundary.
 
+## Dependency lock (ENV2)
+
+The release-grade notebooks install from `tutorials/requirements-release.lock`, a fully resolved Python 3.12 graph generated from `tutorials/requirements-release.in`. Standalone Colab verifies lock SHA-256 `64e9a167567495263694f555195ca7df4488016cc76ab1e327e480509a4ac6d5` before installation. The lock includes transitive dependencies rather than relying only on exact top-level requirements.
+
 ## Automated verification
 
 Pull-request CI performs two distinct layers:

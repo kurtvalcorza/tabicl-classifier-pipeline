@@ -13,3 +13,5 @@ The JSON record identifies the tested revision, clean-run environment, runtime/p
 This automated CPU path covers the committed defaults. It does not claim execution of the optional CUDA fine-tuning branch. A release that specifically changes or claims CUDA fine-tuning behavior must record accelerator-specific execution evidence in the pull request, release note, or another durable test record.
 
 Static validation remains a separate CI job and must not be represented as successful notebook execution.
+
+GitHub-hosted execution transparently remaps Colab's `/content` path to a runner-writable path and records that mapping in the JSON evidence. This is a filesystem adaptation only; notebook task logic and producer/consumer separation are unchanged.

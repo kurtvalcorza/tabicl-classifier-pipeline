@@ -55,7 +55,7 @@ The portable artifact also embeds the labelled training context. Treat the expor
 
 ## Runtime and reproducibility
 
-The tutorials pin their directly installed packages. PyTorch is treated as part of the supported runtime substrate rather than reinstalled after import, so the notebooks print the effective Python, PyTorch, TabICL, accelerator, and principal package versions used by each run. Explicit seeds control the tutorial's splits and model-level stochastic settings; CUDA kernels, hardware, library internals, and wall-clock latency can still introduce run-to-run variation, so reproducibility claims do not imply bitwise identity across hardware.
+The tutorials install from the fully resolved `tutorials/requirements-release.lock` graph generated from `tutorials/requirements-release.in` on Python 3.12. Standalone Colab fetches the lock from GitHub only when a local repository copy is unavailable and verifies SHA-256 `64e9a167567495263694f555195ca7df4488016cc76ab1e327e480509a4ac6d5` before installation. The notebooks then print the effective Python, PyTorch, TabICL, accelerator, and principal package versions used by each run. Explicit seeds control the tutorial's splits and model-level stochastic settings; CUDA kernels, hardware, library internals, and wall-clock latency can still introduce run-to-run variation, so reproducibility claims do not imply bitwise identity across hardware.
 
 ## Release execution evidence
 

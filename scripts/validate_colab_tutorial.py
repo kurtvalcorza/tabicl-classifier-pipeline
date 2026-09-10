@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 from pathlib import Path
 
@@ -9,6 +10,7 @@ MAIN = ROOT / 'tutorials/tabiclv2_classifier_colab.ipynb'
 INFERENCE = ROOT / 'tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb'
 README = ROOT / "tutorials/README.md"
 ROOT_README = ROOT / "README.md"
+RELEASE_LOCK = ROOT / "tutorials/requirements-release.lock"
 
 MODEL_REVISION = "4dcd344ece2c00be9e831fdd35bed57b5ad83e19"
 CHECKPOINT_NAME = 'tabicl-classifier-v2-20260212.ckpt'
@@ -78,12 +80,9 @@ require('**Profile:** `E2E`' in main_all, "main notebook missing visible E2E pro
 require('**Profile:** `ARTIFACT-INFERENCE`' in inf_all, "inference notebook missing visible ARTIFACT-INFERENCE profile declaration")
 
 for marker in (
-    'tabicl[finetune]==2.1.1',
-    'lightgbm==4.7.0',
-    'pyarrow==25.0.1',
-    'pandas==3.0.5',
-    'scikit-learn==1.9.0',
-    'huggingface_hub==1.30.0',
+    'requirements-release.lock',
+    'RELEASE_LOCK_SHA256',
+    'subprocess.run',
     CHECKPOINT_NAME,
     MODEL_REVISION,
     CHECKPOINT_SHA256,
@@ -119,10 +118,9 @@ for marker in (
     require(marker in main_all, f"main notebook missing {marker!r}")
 
 for marker in (
-    'tabicl==2.1.1',
-    'pyarrow==25.0.1',
-    'pandas==3.0.5',
-    'scikit-learn==1.9.0',
+    'requirements-release.lock',
+    'RELEASE_LOCK_SHA256',
+    'subprocess.run',
     BASE_CLASS,
     ARTIFACT_FORMAT,
     "EXPECTED_ZIP_SHA256",
@@ -137,6 +135,11 @@ for marker in (
     "Inference CSV contains duplicate column names",
     "manifest_member_path",
     "rel.is_absolute()",
+    "Ambiguous backslash",
+    "baseModelRevision",
+    "baseModelSha256",
+    "wholeArchiveSha256",
+    "runtimePyTorch",
     "MAX_ARCHIVE_EXPANDED_BYTES",
     "MAX_ARCHIVE_MEMBERS",
     "Unexpected unlisted artifact file",
@@ -152,16 +155,17 @@ for marker in (
 ):
     require(marker in inf_all, f"inference notebook missing {marker!r}")
 
-for forbidden in (
-    'lightgbm>=',
-    'pyarrow>=',
-    'pandas>=',
-    'scikit-learn>=',
-    'huggingface_hub>=',
-):
-    require(forbidden not in main, f"main notebook contains floating direct dependency: {forbidden}")
-for forbidden in ('pyarrow>=', 'pandas>=', 'scikit-learn>='):
-    require(forbidden not in inf, f"inference notebook contains floating direct dependency: {forbidden}")
+require(RELEASE_LOCK.exists(), "missing tutorials/requirements-release.lock")
+lock_bytes = RELEASE_LOCK.read_bytes()
+lock_sha256 = hashlib.sha256(lock_bytes).hexdigest()
+require(lock_sha256 == "64e9a167567495263694f555195ca7df4488016cc76ab1e327e480509a4ac6d5", f"release lock SHA-256 drifted: {lock_sha256}")
+lock_lines = [line.strip() for line in lock_bytes.decode("utf-8").splitlines() if line.strip() and not line.lstrip().startswith("#")]
+require(lock_lines, "release lock is empty")
+for line in lock_lines:
+    require("==" in line, f"release lock contains non-exact dependency: {line}")
+for notebook_code, label in ((main, "main"), (inf, "inference")):
+    require(f'RELEASE_LOCK_SHA256 = "64e9a167567495263694f555195ca7df4488016cc76ab1e327e480509a4ac6d5"' in notebook_code, f"{label} notebook lock digest mismatch")
+    require("%pip -q install" not in notebook_code, f"{label} notebook still resolves an independent direct pip graph")
 
 require(FINETUNED_CLASS not in inf, "inference notebook must not import/use fine-tuning class")
 require("RUN_FINE_TUNING" not in inf, "inference notebook must not expose fine-tuning")
