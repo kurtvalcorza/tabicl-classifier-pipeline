@@ -45,7 +45,7 @@ TabICLv2 is an in-context learning tabular foundation model that ingests trainin
 
 ### Immutable tutorial asset
 
-The notebook retrieves `palmer-penguins.zip` from immutable repository revision `169e60fa8d956aa389c144ac9c7988b92db84a79` and verifies the SHA-256 above before extraction. That revision is retained by the durable branch `anchors/sample-data-20260911`, so deleting the feature branch after merge does not break the published tutorial asset.
+The final notebook loader retrieves `palmer-penguins.zip` from immutable repository revision `169e60fa8d956aa389c144ac9c7988b92db84a79` and verifies the SHA-256 above before extraction. That revision is retained by the durable branch `anchors/sample-data-20260911`, so deleting the feature branch after merge does not break the published tutorial asset.
 
 ---
 
