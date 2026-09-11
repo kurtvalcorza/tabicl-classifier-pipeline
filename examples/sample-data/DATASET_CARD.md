@@ -43,6 +43,10 @@ TabICLv2 is an in-context learning tabular foundation model that ingests trainin
 - **Split:** 60% train (199 rows) / 20% val (67 rows) / 20% test (67 rows) (stratified by species, seed 42, 11 incomplete rows removed from 344 total: 10 missing measurements + 1 unrecorded sex marker, leaving 333 complete rows).
 - **Provenance & License:** Gorman KB, Williams TD, Fraser WR (2014) *Ecological Sexual Dimorphism and Environmental Variability within a Community of Antarctic Penguins (Genus Pygoscelis)*. PLoS ONE 9(3): e90081. Distributed under **CC0 1.0 Universal (Public Domain Dedication)** via OpenML (Dataset 42585).
 
+### Immutable tutorial asset
+
+The notebook retrieves `palmer-penguins.zip` from immutable repository revision `169e60fa8d956aa389c144ac9c7988b92db84a79` and verifies the SHA-256 above before extraction. That revision is retained by the durable branch `anchors/sample-data-20260911`, so deleting the feature branch after merge does not break the published tutorial asset.
+
 ---
 
 ## How Bundled Datasets Were Built
