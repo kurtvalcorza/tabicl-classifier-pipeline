@@ -1,0 +1,42 @@
+name: Relay immutable sample URL fix
+on:
+  push:
+    branches: [feat/add-sample-datasets]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/add-sample-datasets
+      - name: Patch notebook URL
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('tutorials/tabiclv2_classifier_colab.ipynb')
+          nb = json.loads(path.read_text(encoding='utf-8'))
+          old = 'main/examples/sample-data/palmer-penguins.zip'
+          new = '169e60fa8d956aa389c144ac9c7988b92db84a79/examples/sample-data/palmer-penguins.zip'
+          changed = 0
+          for cell in nb['cells']:
+              src = cell.get('source', '')
+              was_list = isinstance(src, list)
+              text = ''.join(src) if was_list else src
+              if isinstance(text, str) and old in text:
+                  text = text.replace(old, new)
+                  cell['source'] = text.splitlines(keepends=True) if was_list else text
+                  changed += 1
+          if changed != 1:
+              raise RuntimeError(f'expected one sample URL replacement, got {changed}')
+          path.write_text(json.dumps(nb, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+          git rm .github/workflows/relay-pin-fix.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tutorials/tabiclv2_classifier_colab.ipynb
+          git commit -m 'fix(tutorials): use immutable Palmer sample URL'
+          git push origin HEAD:feat/add-sample-datasets
