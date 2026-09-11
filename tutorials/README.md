@@ -68,3 +68,14 @@ A notebook known to fail in current Google Colab is not release-ready even if th
 ## AI provenance
 
 These tutorials were developed with substantial AI assistance using **GPT-5.6 Sol High**, via **OpenAI / ChatGPT**, under Agent Relay role **Builder**, with maintainer direction and review. Attribution is provenance, not sign-off or independent verification.
+
+
+## Sample dataset portfolio
+
+The E2E classifier tutorial includes three built-in/sample paths while preserving the hardened Notebook Specification v1.0 workflow:
+
+- **Breast Cancer Wisconsin** — binary numeric sanity check, built into scikit-learn.
+- **Wine Recognition** — three-class numeric classification, built into scikit-learn.
+- **Palmer Penguins** — mixed categorical/numeric multiclass classification from the repository sample archive.
+
+The external sample archive is downloaded from this repository's `main` branch and verified against its recorded SHA-256 (`fe894295ccc0a447dc020f5d57798968b95eae3da1a4cbe09a638e6b1bd0ba44`) before use. Dataset provenance, schemas, split construction, and licensing are documented in `../examples/sample-data/DATASET_CARD.md`.
