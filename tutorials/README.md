@@ -78,4 +78,4 @@ The E2E classifier tutorial includes three built-in/sample paths while preservin
 - **Wine Recognition** — three-class numeric classification, built into scikit-learn.
 - **Palmer Penguins** — mixed categorical/numeric multiclass classification from the repository sample archive.
 
-The external sample archive is downloaded from this repository's `main` branch and verified against its recorded SHA-256 (`fe894295ccc0a447dc020f5d57798968b95eae3da1a4cbe09a638e6b1bd0ba44`) before use. Dataset provenance, schemas, split construction, and licensing are documented in `../examples/sample-data/DATASET_CARD.md`.
+The external Palmer Penguins archive is downloaded from immutable repository revision `169e60fa8d956aa389c144ac9c7988b92db84a79` (retained by `anchors/sample-data-20260911`) and verified against its recorded SHA-256 (`fe894295ccc0a447dc020f5d57798968b95eae3da1a4cbe09a638e6b1bd0ba44`) before use. Dataset provenance, schemas, split construction, and licensing are documented in `../examples/sample-data/DATASET_CARD.md`.
