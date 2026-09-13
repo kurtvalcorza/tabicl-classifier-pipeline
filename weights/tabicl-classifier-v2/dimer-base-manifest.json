@@ -1,0 +1,15 @@
+{
+  "format": "dimer_hf_snapshot",
+  "formatVersion": 1,
+  "modelKey": "tabicl-classifier-v2",
+  "modelId": "jingang/TabICL",
+  "revision": "4dcd344ece2c00be9e831fdd35bed57b5ad83e19",
+  "files": [
+    {
+      "path": "tabicl-classifier-v2-20260212.ckpt",
+      "bytes": 110368038,
+      "sha256": "bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0"
+    }
+  ],
+  "totalBytes": 110368038
+}
