@@ -38,6 +38,13 @@ TEMPLATE = {
     "stem": "tabiclv2_classifier",
     "notebook_name": "tabiclv2_classifier_colab.ipynb",
     "profile": "E2E",
+    "mode": "GUIDED",
+    "run_all": (
+        "Selecting **Run all** in a fresh supported runtime installs the pinned dependencies, stages and digest-verifies the pinned TabICLv2 checkpoint, loads scikit-learn's bundled Breast Cancer Wisconsin table (no download), validates the tables into an input manifest and encodes them, evaluates the pretrained TabICLv2 classifier **adapted by in-context conditioning on the training split** (the adaptation stage that runs by default — no gradient update), fits classical tree baselines and a majority-class baseline for comparison and writes the evaluation report, exports a DIMER-style serving bundle and reloads it from disk to prove the fresh boundary. Gradient fine-tuning (`FinetunedTabICLClassifier`) is an optional experiment (`RUN_FINE_TUNING`, off by default, Section 6) because it needs a GPU-sized time budget; a reviewer reading NOTEBOOK_SPEC 2.0 RUN7/FT2 as requiring gradient adaptation on the default path should treat that as an open decision. No repository clone, DIMER worker or service, credential, upload dialog or configuration edit is required (§5)."
+    ),
+    "byod": (
+        "After the sample workflow completes, set `USE_BYOD = True` in Section 4 and re-run from that cell to upload one labelled CSV (or pre-split files); it enters the same validation, encoding, in-context conditioning, baseline, evaluation, export and fresh-reload cells as the sample (DAT14), and `RUN_NEW_DATA_INFERENCE` in Section 8 scores your own unlabelled rows with class probabilities. Expected schema, ceilings and privacy guidance are stated in the Prerequisites and in Section 4; uploads stay inside this runtime. BYOD is optional and never part of the default path."
+    ),
     "pipeline_class": "TabICLClassificationPipeline",
     "weights_key": "tabicl-classifier-v2",
     # generator /2: the package is one module, api.py (not pipeline.py); it holds the identity constants and the

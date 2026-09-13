@@ -21,6 +21,13 @@ TEMPLATE = {
     "stem": "tabiclv2_classifier_artifact_inference",
     "notebook_name": "tabiclv2_classifier_artifact_inference_colab.ipynb",
     "profile": "ARTIFACT-INFERENCE",
+    "mode": "GUIDED",
+    "run_all": (
+        "**Known NOTEBOOK_SPEC 2.0 gap (§19, SART1/RUN5/RUN2):** the default path does not yet obtain a trusted sample bundle or sample input automatically — with `ARTIFACT_ZIP_PATH` and `NEW_DATA_PATH` empty, Sections 4 and 6 open upload dialogs for a predictor bundle produced by the E2E tutorial and for unlabelled rows; an executor sets both paths to files already in the runtime to skip the dialogs. Until a published sample bundle and sample rows are wired in, this notebook is a `Candidate`, not release-grade. Once they are present, **Run all** installs the pinned dependencies, validates the bundle (path-safe extraction, manifest digests, provenance, pinned model identity) before any deserialisation, reconstructs the in-context classifier from the bundle alone (support rows and fitted encoders restored, nothing refit), validates the new rows into an input manifest, predicts with class probabilities, reports what cannot be measured, and exports outputs — all inside this kernel, with no DIMER worker or service and no credential."
+    ),
+    "byod": (
+        "New-input BYOD is the `NEW_DATA_PATH`/upload branch in Section 6: your own unlabelled CSV with the bundle's required feature columns passes through the same validation, prediction and export cells. A user-supplied bundle is the separate `ARTIFACT_ZIP_PATH`/upload branch in Section 4 (`EXPECTED_ZIP_SHA256` pins it), validated before any state is reconstructed. Uploads stay inside this runtime; do not upload confidential or restricted data unless you are authorised to process it here."
+    ),
     "title": "TabICLv2 Classifier — DIMER artifact inference tutorial (standalone)",
     "badges": [
         badge

@@ -8,6 +8,8 @@ tags:
   - in-context-learning
   - tabicl
 base_model: jingang/TabICL
+date_published: "2026-02-12"
+date_published_source: "Hugging Face Hub repository creation date of the exact hosted checkpoint (`createdAt`, https://huggingface.co/api/models/jingang/TabICL)"
 ---
 
 # TabICLv2 (tabicl 2.1.1) — Tabular Foundation Model (Classifier & Regressor)
@@ -16,7 +18,7 @@ base_model: jingang/TabICL
 [![Upstream GitHub](https://img.shields.io/badge/Upstream%20GitHub-soda--inria%2Ftabicl-181717?style=flat&logo=github&logoColor=white)](https://github.com/soda-inria/tabicl)
 [![arXiv Paper](https://img.shields.io/badge/arXiv-2602.11139-b31b1b.svg)](https://arxiv.org/abs/2602.11139)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![Classifier Pipeline](https://img.shields.io/badge/Classifier%20Repo-tabicl--classifier--pipeline-2ea44f?style=flat&logo=github)](https://github.com/kurtvalcorza/tabicl-classifier-pipeline)
+
 [![Regressor Pipeline](https://img.shields.io/badge/Regressor%20Repo-tabicl--regressor--pipeline-0969da?style=flat&logo=github)](https://github.com/kurtvalcorza/tabicl-regressor-pipeline)
 
 > [!WARNING]
@@ -53,7 +55,7 @@ Both pipeline implementations provide ready-to-run interactive Google Colab note
 
 ---
 
-###### Description
+#### Description
 
 TabICLv2 Classifier packages the `tabicl-classifier-v2-20260212.ckpt` checkpoint from `jingang/TabICL` at Hugging Face revision `4dcd344ece2c00be9e831fdd35bed57b5ad83e19`, a pretrained tabular foundation model developed by Jingang Qu, David Holzmüller, Gaël Varoquaux, and Marine Le Morvan of the Soda team at Inria, run through the `tabicl==2.1.1` reference implementation. The model is a three-stage Transformer for tables — a column-wise encoder that embeds each feature distribution, a row-wise encoder that builds one representation per observation, and a dataset-wise in-context-learning Transformer that attends from the labelled support rows to the query rows and reads off class logits. Version 2 introduces a redesigned synthetic-data prior and long-context improvements over the original TabICL; it was pretrained on synthetic classification tasks with up to 10 classes and supports more classes downstream through mixed-radix ensembling.
 

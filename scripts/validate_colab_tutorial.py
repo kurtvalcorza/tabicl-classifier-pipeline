@@ -161,7 +161,7 @@ for label, content in (("main", main_all), ("artifact", inf_all)):
 # Registry.
 registry = README.read_text(encoding="utf-8")
 require("| `E2E` |" in registry and "| `ARTIFACT-INFERENCE` |" in registry, "tutorial registry missing profiles")
-require("DIMER Notebook Specification 1.1" in registry, "tutorial registry missing spec version")
+require("DIMER Notebook Specification 2.0" in registry, "tutorial registry missing spec version")
 require("requirements-release.lock" in registry, "tutorial registry does not document transitive lock")
 
 # Executor evidence contract (the previous pair's kernel executor; must not fake execution).
