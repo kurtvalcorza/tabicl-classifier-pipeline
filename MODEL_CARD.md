@@ -1,6 +1,6 @@
 ---
 license: bsd-3-clause
-model_card_spec: "1.0"
+model_card_spec: "1.1"
 pipeline_tag: tabular-classification
 tags:
   - tabular-classification
@@ -10,13 +10,48 @@ tags:
 base_model: jingang/TabICL
 ---
 
-# TabICLv2 Classifier
+# TabICLv2 (tabicl 2.1.1) — Tabular Foundation Model (Classifier & Regressor)
 
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-jingang%2FTabICL-ffcc4d?style=flat)](https://huggingface.co/jingang/TabICL)
-[![GitHub](https://img.shields.io/badge/GitHub-soda--inria%2Ftabicl-181717?style=flat&logo=github&logoColor=white)](https://github.com/soda-inria/tabicl)
-[![arXiv](https://img.shields.io/badge/arXiv-2602.11139-b31b1b.svg)](https://arxiv.org/abs/2602.11139)
+[![Upstream GitHub](https://img.shields.io/badge/Upstream%20GitHub-soda--inria%2Ftabicl-181717?style=flat&logo=github&logoColor=white)](https://github.com/soda-inria/tabicl)
+[![arXiv Paper](https://img.shields.io/badge/arXiv-2602.11139-b31b1b.svg)](https://arxiv.org/abs/2602.11139)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![Classifier Pipeline](https://img.shields.io/badge/Classifier%20Repo-tabicl--classifier--pipeline-2ea44f?style=flat&logo=github)](https://github.com/kurtvalcorza/tabicl-classifier-pipeline)
+[![Regressor Pipeline](https://img.shields.io/badge/Regressor%20Repo-tabicl--regressor--pipeline-0969da?style=flat&logo=github)](https://github.com/kurtvalcorza/tabicl-regressor-pipeline)
 
+> [!WARNING]
+> ⚠️ **Provided for research, training, and evaluation purposes only.** Model weights are redistributed unmodified under their upstream license, which controls your use, including any commercial use or redistribution; the accompanying code and notebooks are released under this repository's license. All of it is supplied **"as is"**, without warranty of any kind, and has not been validated for production, clinical, or safety-critical use. Running the notebooks downloads third-party weights and datasets governed by their own licenses and consumes compute on your own Colab/Kaggle account. To the maximum extent permitted by law, the maintainers of this repository and the DIMER platform accept no liability for any damages arising from their use. Hosting implies no affiliation with or endorsement by the original authors.
+
+---
+
+## Interactive Colab Tutorials
+
+Both pipeline implementations provide ready-to-run interactive Google Colab notebooks demonstrating in-context evaluation, optional fine-tuning, serving-bundle export, and fresh-process inference from the exported bundle:
+
+### TabICLv2 Classifier (`tabicl-classifier-pipeline`)
+
+- **End-to-End Pipeline Tutorial**:  
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_colab.ipynb) [`tabiclv2_classifier_colab.ipynb`](https://github.com/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_colab.ipynb)  
+  *Acquire the pinned TabICLv2 classification checkpoint, validate your own labelled table, evaluate in-context classification on a held-out split, optionally fine-tune on a GPU, and export a serving bundle carrying checkpoint and training context.*
+
+- **Serving Artifact Inference Tutorial**:  
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb) [`tabiclv2_classifier_artifact_inference_colab.ipynb`](https://github.com/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb)  
+  *Verify an externally supplied TabICL serving bundle (archive consistency, optional SHA-256, checkpoint plus training context), reconstruct the in-context estimator, and predict class labels for new rows with no gradient fine-tuning.*
+
+### TabICLv2 Regressor (`tabicl-regressor-pipeline`)
+
+- **End-to-End Pipeline Tutorial**:  
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-regressor-pipeline/blob/main/tutorials/tabiclv2_regressor_colab.ipynb) [`tabiclv2_regressor_colab.ipynb`](https://github.com/kurtvalcorza/tabicl-regressor-pipeline/blob/main/tutorials/tabiclv2_regressor_colab.ipynb)  
+  *Acquire the pinned TabICLv2 regression checkpoint, validate your own labelled table, evaluate in-context regression on a held-out split, optionally fine-tune on a GPU, and export a `tabicl-dimer-regressor-v1` serving artifact.*
+
+- **Serving Artifact Inference Tutorial**:  
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-regressor-pipeline/blob/main/tutorials/tabiclv2_regressor_artifact_inference_colab.ipynb) [`tabiclv2_regressor_artifact_inference_colab.ipynb`](https://github.com/kurtvalcorza/tabicl-regressor-pipeline/blob/main/tutorials/tabiclv2_regressor_artifact_inference_colab.ipynb)  
+  *Validate an externally supplied `tabicl-dimer-regressor-v1` serving artifact, reconstruct its in-context state, and predict continuous values for new rows with no gradient fine-tuning.*
+
+> [!NOTE]
+> The default in-context path runs on any Colab runtime (pretrained evaluation completes on CPU in seconds on the sample). A GPU runtime is needed only when `RUN_FINE_TUNING` is switched on; fine-tuning is optional and, on the shipped sample, does not improve on the in-context baseline.
+
+---
 
 ###### Description
 
