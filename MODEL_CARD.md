@@ -12,7 +12,7 @@ date_published: "2026-02-12"
 date_published_source: "Hugging Face Hub repository creation date of the exact hosted checkpoint (`createdAt`, https://huggingface.co/api/models/jingang/TabICL)"
 ---
 
-# TabICLv2 (tabicl 2.1.1) — Tabular Foundation Model (Classifier & Regressor)
+# TabICLv2 — Tabular Foundation Model (Classifier & Regressor)
 
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-jingang%2FTabICL-ffcc4d?style=flat)](https://huggingface.co/jingang/TabICL)
 [![Upstream GitHub](https://img.shields.io/badge/Upstream%20GitHub-soda--inria%2Ftabicl-181717?style=flat&logo=github&logoColor=white)](https://github.com/soda-inria/tabicl)
