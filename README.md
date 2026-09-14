@@ -417,3 +417,7 @@ container image tag, this forms a chain from data to served model.
   [*TabICLv2: A better, faster, scalable, and open tabular foundation model*](https://arxiv.org/abs/2602.11139).
 - [TabICL source code](https://github.com/soda-inria/tabicl), Soda team, Inria (BSD-3-Clause).
 - [`jingang/TabICL`](https://huggingface.co/jingang/TabICL) model card and checkpoints, Hugging Face.
+
+## AI Assistance Disclosure
+
+This tutorial and its accompanying documentation were developed with generative AI assistance for code development and technical writing under maintainer direction. The maintainer remains responsible for reviewing the implementation, validating results, and making release decisions. AI assistance does not constitute independent verification, provider endorsement, or release approval.

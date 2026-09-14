@@ -82,3 +82,7 @@ The standalone E2E classifier tutorial includes three sample paths plus BYOD:
 - **Palmer Penguins** — the mixed categorical/numeric archive under `examples/sample-data/` with an independent train/validation/test split. It is an optional, non-default `DATA_SOURCE`: the notebook fetches `palmer-penguins.zip` from this repository's raw content at the immutable commit `169e60fa8d956aa389c144ac9c7988b92db84a79` and verifies it against the recorded SHA-256 (`fe894295ccc0a447dc020f5d57798968b95eae3da1a4cbe09a638e6b1bd0ba44`) before reading it — a pinned data download, not a clone or a package install; the default sample path needs no repository access. Dataset provenance, schemas, split construction, and licensing are documented in [`../examples/sample-data/DATASET_CARD.md`](../examples/sample-data/DATASET_CARD.md).
 
 These are tutorial/sanity datasets, not benchmark claims.
+
+## AI Assistance Disclosure
+
+This tutorial and its accompanying documentation were developed with generative AI assistance for code development and technical writing under maintainer direction. The maintainer remains responsible for reviewing the implementation, validating results, and making release decisions. AI assistance does not constitute independent verification, provider endorsement, or release approval.
