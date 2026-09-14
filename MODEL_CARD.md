@@ -8,6 +8,8 @@ tags:
   - in-context-learning
   - tabicl
 base_model: jingang/TabICL
+date_published: "2026-02-12"
+date_published_source: "Hugging Face Hub repository creation date of the exact hosted checkpoint (`createdAt`, https://huggingface.co/api/models/jingang/TabICL)"
 ---
 
 # TabICLv2 (tabicl 2.1.1) — Tabular Foundation Model (Classifier & Regressor)
@@ -16,7 +18,7 @@ base_model: jingang/TabICL
 [![Upstream GitHub](https://img.shields.io/badge/Upstream%20GitHub-soda--inria%2Ftabicl-181717?style=flat&logo=github&logoColor=white)](https://github.com/soda-inria/tabicl)
 [![arXiv Paper](https://img.shields.io/badge/arXiv-2602.11139-b31b1b.svg)](https://arxiv.org/abs/2602.11139)
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![Classifier Pipeline](https://img.shields.io/badge/Classifier%20Repo-tabicl--classifier--pipeline-2ea44f?style=flat&logo=github)](https://github.com/kurtvalcorza/tabicl-classifier-pipeline)
+
 [![Regressor Pipeline](https://img.shields.io/badge/Regressor%20Repo-tabicl--regressor--pipeline-0969da?style=flat&logo=github)](https://github.com/kurtvalcorza/tabicl-regressor-pipeline)
 
 > [!WARNING]
@@ -53,7 +55,7 @@ Both pipeline implementations provide ready-to-run interactive Google Colab note
 
 ---
 
-###### Description
+#### Description
 
 TabICLv2 Classifier packages the `tabicl-classifier-v2-20260212.ckpt` checkpoint from `jingang/TabICL` at Hugging Face revision `4dcd344ece2c00be9e831fdd35bed57b5ad83e19`, a pretrained tabular foundation model developed by Jingang Qu, David Holzmüller, Gaël Varoquaux, and Marine Le Morvan of the Soda team at Inria, run through the `tabicl==2.1.1` reference implementation. The model is a three-stage Transformer for tables — a column-wise encoder that embeds each feature distribution, a row-wise encoder that builds one representation per observation, and a dataset-wise in-context-learning Transformer that attends from the labelled support rows to the query rows and reads off class logits. Version 2 introduces a redesigned synthetic-data prior and long-context improvements over the original TabICL; it was pretrained on synthetic classification tasks with up to 10 classes and supports more classes downstream through mixed-radix ensembling.
 
@@ -111,7 +113,7 @@ Metrics are chosen for a probabilistic multiclass classifier whose intended use 
 
 The fine-tuner scores the fine-tuned model on the held-out split in `_classification_metrics` (`tabicl-classifier-finetuner/train.py`) and writes `accuracy`, `logLoss`, and — for binary targets — `rocAuc`, or `rocAucOvr` for multiclass, into the result artifact, with `rocAucError` recorded when AUC is undefined (a class absent from the holdout). The headline metric is the DIMER hyperparameter `eval_metric` (default `accuracy`).
 
-Why these: accuracy captures discrete correctness and is the right summary when classes are balanced and error costs similar; log loss captures probability quality and penalises confident mistakes, which matters whenever the class probabilities are used operationally; ROC-AUC captures ranking quality independent of any threshold and is the informative one for imbalanced problems, with the one-vs-rest form extending it to many classes. Reading only accuracy hides both calibration and imbalance failures, which is why all three are written. Upstream, the authors report that untuned TabICLv2 surpasses RealTabPFN-2.5 on TabArena and TALENT with accuracy as the principal metric; that is a published relative ranking, not a number this pipeline measures or claims.
+Why these: accuracy captures discrete correctness and is the right summary when classes are balanced and error costs similar; log loss captures probability quality and penalises confident mistakes, which matters whenever the class probabilities are used operationally; ROC-AUC captures ranking quality independent of any threshold and is the informative one for imbalanced problems, with the one-vs-rest form extending it to many classes. Reading only accuracy hides both calibration and imbalance failures, which is why all three are written. Upstream, the authors report that untuned TabICLv2 surpasses RealTabPFN-2.5 on TabArena and TALENT with accuracy as the principal metric; that is a published relative ranking, not a number this pipeline measures or claims. In the standalone tutorials `evaluation_report` in `src/tabicl_classifier_pipeline/api.py` reports `classification_metrics` under the ids `accuracy`, `balanced_accuracy`, `f1_weighted`, `log_loss` and `roc_auc` next to `majority_class_baseline`, with the verdict `sample-sanity` on a single seeded stratified split or `not-measurable` when no labelled rows exist.
 
 ###### Decision thresholds
 
@@ -150,6 +152,8 @@ Implemented in the composed workers, each inspectable in the named code:
 - **Statistical mitigations:** the training cap is stratified so every class survives, and a cap below the class count is raised as an error rather than silently dropping classes; prediction is batched to bound memory.
 - **Reproducibility:** `seed` drives the split, the cap, and TabICL's `random_state`; the result artifact records the checkpoint digest, revision, source, dataset digest, and the effective hyperparameters.
 - **Refusals:** fine-tuning refuses any non-CUDA device rather than silently training on CPU; the validator writes `classNames` on every result because DIMER requires it.
+
+In the standalone tutorials `validate_inputs` in `src/tabicl_classifier_pipeline/api.py` applies exactly the checks `prepare_classification_table` and `read_inference_csv` apply (unique columns, missing-target rows dropped and counted, row/feature/class ceilings, fitted feature schema, no pre-existing output columns) and writes an input manifest before any model runs; `align_to_schema` refuses holdout or inference classes the support rows never contained.
 
 ###### Risks and harms
 

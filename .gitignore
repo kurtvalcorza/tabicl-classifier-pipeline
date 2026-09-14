@@ -1,3 +1,16 @@
-# Local TabICLv2 base checkpoint (~105MB) — never committed; baked into the
+# Local TabICLv2 base checkpoint (~110MB) — never committed; baked into the
 # finetuner image from Hugging Face at build time, or kept here for a local bake.
-weights/
+# Only the snapshot manifest (weights/<MODEL_KEY>/dimer-base-manifest.json) and small text files are committable.
+weights/**/*.safetensors
+weights/**/*.ckpt
+weights/**/*.bin
+weights/**/*.pt
+weights/**/*.pth
+weights/**/*.onnx
+weights/**/.cache/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
