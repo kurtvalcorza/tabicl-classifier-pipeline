@@ -111,7 +111,7 @@ they are measurements for the stated runtime, not general estimates.
 
 | Date (UTC) | Commit / notebook blob | Executor | Path exercised | Wall | Outcome |
 |---|---|---|---|---|---|
-| | | | Standalone E2E default sample path | | pending — queued to the GPU lane |
+| 2026-09-14 | `b1705c6` / `f1b597a0b6ad` | Kaggle T4 (`kurtvalcorza/dimer-nb2-tabiclv2-classifier` v1) | Default sample path | 251.4 s | **PASSED** — 9/9 ok code cells executed cleanly, 5 files, 110 MB staged |
 | | | | Standalone ARTIFACT-INFERENCE with an external bundle | | pending — queued to the GPU lane |
 
 ## Current status
