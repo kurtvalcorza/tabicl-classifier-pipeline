@@ -21,7 +21,7 @@ jobs:
       - run: pip install -e . --no-deps
       - name: Lint
         run: ruff check src tests tools
-      - name: Unit tests (offline: snapshot helpers, role helpers, parity)
+      - name: "Unit tests (offline: snapshot helpers, role helpers, parity)"
         run: pytest -q
       - name: Repository-specific spec 1.1 checks
         run: python scripts/validate_colab_tutorial.py
