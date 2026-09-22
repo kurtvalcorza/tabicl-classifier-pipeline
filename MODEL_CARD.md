@@ -60,11 +60,11 @@ Both pipeline implementations provide ready-to-run interactive Google Colab note
 
 TabICLv2 Classifier packages the `tabicl-classifier-v2-20260212.ckpt` checkpoint from `jingang/TabICL` at Hugging Face revision `4dcd344ece2c00be9e831fdd35bed57b5ad83e19`, a pretrained tabular foundation model developed by Jingang Qu, David Holzmüller, Gaël Varoquaux, and Marine Le Morvan of the Soda team at Inria, run through the `tabicl==2.1.1` reference implementation. The model is a three-stage Transformer for tables — a column-wise encoder that embeds each feature distribution, a row-wise encoder that builds one representation per observation, and a dataset-wise in-context-learning Transformer that attends from the labelled support rows to the query rows and reads off class logits. Version 2 introduces a redesigned synthetic-data prior and long-context improvements over the original TabICL; it was pretrained on synthetic classification tasks with up to 10 classes and supports more classes downstream through mixed-radix ensembling.
 
-At inference the model conditions on the labelled training table as in-context support and emits a class-probability vector per query row. Adaptation happens through in-context conditioning by default and, in this pipeline, through gradient fine-tuning on the operator's table (`tabicl-classifier-finetuner/train.py`, `early_stopping=True`, learning rate 1e-5 by default). What this repository adds is the DIMER composition around those weights: the pipeline contract (`dimer-pipeline.json`, `DIMER_CONTRACT.md`), the dataset specification, the Colab artifact-inference tutorial, and the release conformance record; the validator and fine-tuner workers it composes live in the sibling `tabicl-classifier-dataset-validator` and `tabicl-classifier-finetuner` repositories. The upstream checkpoint is not modified by this repository.
+At inference the model conditions on the labelled training table as in-context support and emits a class-probability vector per query row. Adaptation happens through in-context conditioning by default and, in this pipeline, through gradient fine-tuning on the operator's table (`tabicl-classifier-finetuner/train.py`, `early_stopping=True`, learning rate 1e-5 by default). What this repository adds is the DIMER composition around those weights: the pipeline contract (`dimer-pipeline.json`, `DIMER_CONTRACT.md`), the dataset specification, the Colab artifact-inference tutorial, and the release conformance record; the validator and fine-tuner it composes live in the sibling `tabicl-classifier-dataset-validator` and `tabicl-classifier-finetuner` repositories. The upstream checkpoint is not modified by this repository.
 
 #### Intended Use and Limitations
 
-The use cases below are the ones envisioned during development; the limits are the ones the workers enforce.
+The use cases below are the ones envisioned during development; the limits are the ones the pipeline enforces.
 
 ###### Primary Intended Uses
 
@@ -74,7 +74,7 @@ Concrete application domains envisioned during development: binary, multiclass, 
 
 ###### Primary Intended Users
 
-Machine-learning researchers, data scientists, machine-learning engineers, software developers, and scientific researchers building predictive systems from structured datasets. The envisioned deployment setting is internal enterprise or research use through the DIMER platform, where the fine-tuner runs as a CUDA worker and the validator as a CPU worker — not a public-facing service.
+Machine-learning researchers, data scientists, machine-learning engineers, software developers, and scientific researchers building predictive systems from structured datasets. The envisioned deployment setting is internal enterprise or research use through the DIMER platform, with the fine-tuner on a CUDA device and the validator on CPU — not a public-facing service.
 
 The pipeline assumes its users understand dataset provenance, holdout evaluation, leakage, class imbalance, and distribution shift, and know that `predict()` is an argmax over class probabilities that have not been calibrated for their domain, that a holdout metric on a few hundred rows has wide variance, and that fine-tuning needs a CUDA GPU and will fail without one rather than fall back. A user who cannot tell a stratified holdout from an in-sample score is outside the assumed competency.
 
@@ -146,7 +146,7 @@ Where such a use is foreseeable — a triage classifier on a clinical feature ta
 
 ###### Mitigations
 
-Implemented in the composed workers, each inspectable in the named code:
+Implemented in the fine-tuner and validator, each inspectable in the named code:
 
 - **Supply-chain integrity:** the base checkpoint is downloaded with `hf_hub_download(..., revision=BASE_MODEL_REVISION)` at `4dcd344e…`, its SHA-256 is computed and compared with `BASE_MODEL_SHA256` (`bdc7dbd5…`), and a mismatch raises unless the checkpoint was DIMER-provided, in which case the digest and `matches_pinned: false` are recorded in provenance rather than enforced; `tabicl` is pinned to 2.1.1.
 - **Input integrity:** the validator rejects archives over 1 GiB uncompressed, fewer than 50 training or 10 evaluation rows, more than 2,000 features, a single class, or more than 1,000 classes; the fine-tuner re-applies the feature limit, refuses a single CSV over 512 MiB, and refuses a stratified split when any class has fewer than 2 rows.
