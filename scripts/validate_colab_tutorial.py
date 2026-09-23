@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repository-specific static checks for the standalone tutorials (NOTEBOOK_SPEC 1.1).
+"""Repository-specific static checks for the standalone tutorials (NOTEBOOK_SPEC 2.0).
 
 The carrier, parity, hygiene and profile checks live in ``tools/validate_release_assets.py`` (run first). This
 script keeps the invariants that are specific to this repository's release contract: the exact PEP 517 build
@@ -70,7 +70,7 @@ main_own, inf_own = code_text(main_nb, outside_modules=True), code_text(inf_nb, 
 for nb, profile, label in ((main_nb, "E2E", "main"), (inf_nb, "ARTIFACT-INFERENCE", "artifact")):
     dimer = nb.get("metadata", {}).get("dimer", {})
     require(dimer.get("notebook_profile") == profile, f"{label} profile metadata")
-    require(dimer.get("notebook_spec") == "1.1" and dimer.get("standalone") is True, f"{label} must be standalone spec 1.1")
+    require(dimer.get("notebook_spec") == "2.0" and dimer.get("standalone") is True, f"{label} must be standalone spec 2.0")
 for marker in ("**Profile:** `E2E`", "**This notebook is standalone.**", "## Interpretation and limits"):
     require(marker in main_all, f"main missing {marker!r}")
 for marker in ("**Profile:** `ARTIFACT-INFERENCE`", "**This notebook is standalone.**", "## Interpretation and limits"):
@@ -171,5 +171,5 @@ for marker in ("NotebookClient", "client.execute()", "separate fresh Jupyter ker
 require("exec(compile(" not in executor, "release verifier still executes notebook cells as plain Python")
 require("startswith(\"%\")" not in executor, "release verifier still strips notebook magics")
 
-print("NOTEBOOK_SPEC 1.1 repository-specific static conformance: OK")
+print("NOTEBOOK_SPEC 2.0 repository-specific static conformance: OK")
 print("NOTE: static validation is not clean-runtime execution evidence.")
