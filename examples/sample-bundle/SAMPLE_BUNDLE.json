@@ -1,0 +1,28 @@
+{
+  "description": "Pinned sample bundle for the ARTIFACT-INFERENCE notebook's default path: the bundle the E2E notebook exports on its default path (Sample: Breast Cancer, mode pretrained), without its checkpoint, which is the pinned base checkpoint.",
+  "producer": "tools/build_sample_bundle.py: the E2E stage runner's stage_data + stage_validate + build_manifest; no model was run (metrics: null)",
+  "checkpoint": {
+    "is": "the pinned base checkpoint (mode pretrained)",
+    "file": "tabicl-classifier-v2-20260212.ckpt",
+    "bytes": 110368038,
+    "sha256": "bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0"
+  },
+  "e2e_cross_check": "the E2E notebook's export prints matches_pinned_sample_context on its default path",
+  "data": "scikit-learn load_breast_cancer (Wisconsin Diagnostic Breast Cancer, UCI; 569 rows), seeded stratified 60/20/20 split, seed 42; the support (train) partition",
+  "support_rows": 341,
+  "artifact_sha256": "c1ffa60b17fa7580653dbaa3202ed6f04d2170442523d2359e8553f8a4348990",
+  "files": {
+    "artifact.json": {
+      "bytes": 2303,
+      "sha256": "c1ffa60b17fa7580653dbaa3202ed6f04d2170442523d2359e8553f8a4348990"
+    },
+    "training_context.parquet": {
+      "bytes": 96952,
+      "sha256": "76bc9526fd1722abcf324ff7cf3ea7d990abd2a9e4c43c228fb828c667bcb04e"
+    },
+    "new_rows.csv": {
+      "bytes": 2198,
+      "sha256": "fd378f9d11ae56581d663dfbcae534c85600ea04302e449d440cb60071e485ef"
+    }
+  }
+}
