@@ -1,0 +1,2 @@
+# Executed notebooks are recorded byte-for-byte as hosted-run evidence.
+docs/execution-evidence/** -text

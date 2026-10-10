@@ -1,0 +1,140 @@
+[colab] Parsing notebook '/home/kurt/colab-runs/tabicl-classifier-pipeline-f59e233-846791/tabiclv2_classifier_colab_f59e233_colab-cli-t4.ipynb'...
+[colab] Executing cell 1/11 - Infrastructure: check the runtime, accelerator and disk; create (or keep) the run directory...
+{'accelerator': 'Tesla T4, 15360 MiB', 'kernel_python': '3.13.15', 'run_directory': '/content/dimer_runs/tabiclv2_classifier/bd441f8594d3', 'outputs': '/content/outputs', 'weights': '/content/weights', 'environment_root': '/tmp/dimer_uv', 'free_gib': {'weights': 193.3, 'environment': 193.3}}
+[colab] Executing cell 2/11 - Infrastructure: write and verify the carried package, stage runner, lock, manifest and samples...
+{'carried_files': 8, 'verified': True, 'repository': 'kurtvalcorza/tabicl-classifier-pipeline', 'revision': 'fba80c60bf26a41fdc6a66d6a14608c9747b5b2c', 'generator': 'build_notebook.py/3.0-tabular'}
+[colab] Executing cell 3/11 - Infrastructure: build (or reuse) the isolated locked environment and define the stage runner...
+{'notebook_source': 'fba80c60bf26a41fdc6a66d6a14608c9747b5b2c', 'python': '3.12.12', 'torch': '2.14.0', 'tabicl': '2.1.1', 'numpy': '2.5.2', 'pandas': '3.0.5', 'scikit-learn': '1.9.0', 'lightgbm': '4.7.0', 'cuda': True, 'locked_packages': 90, 'environment': '/tmp/dimer_uv/venv-c364e6a779ced5aa', 'environment_reused': False, 'setup_seconds': 79}
+[colab] Executing cell 4/11 - Infrastructure: stage and digest-verify the pinned checkpoint...
+Running stage 'weights' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/bd441f8594d3/logs/weights.log
+{'model_id': 'jingang/TabICL', 'revision': '4dcd344ece2c00be9e831fdd35bed57b5ad83e19', 'license': 'bsd-3-clause', 'files': 1, 'total_bytes': 110368038}
+{'weights_dir': '/content/weights/tabicl-classifier-v2', 'fetched': ['tabicl-classifier-v2-20260212.ckpt']}
+{'verified_files': 1, 'revision': '4dcd344ece2c00be9e831fdd35bed57b5ad83e19', 'sha256': ['bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0']}
+[colab] Executing cell 5/11 - tabiclv2_classifier-14...
+Running stage 'data' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/bd441f8594d3/logs/data.log
+{'sample_kind': 'sample', 'name': 'sklearn-breast-cancer', 'source': 'Sample: Breast Cancer', 'target': 'target', 'train_rows': 341, 'holdout_rows': 114, 'test_rows': 114, 'csv_sha256': '2f6e66b6b9bc9f0d5e46e805b35adae8d959bc0f7d7a26b40b68c6b10ef007aa', 'dropped_missing_target_rows_before_split': {}, 'text_columns': []}
+[colab] Executing cell 6/11 - tabiclv2_classifier-17...
+Running stage 'validate' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/bd441f8594d3/logs/validate.log
+{'ceilings': {'MIN_TRAIN_ROWS': 50, 'MIN_EVAL_ROWS': 2, 'MAX_TRAIN_ROWS': 50000, 'MAX_FEATURES': 2000, 'MIN_CLASSES': 2, 'MIN_ROWS_PER_CLASS': 2}, 'decision_rule': 'argmax'}
+{
+  "id": "sklearn-breast-cancer:train",
+  "mode": "fit",
+  "rows": 341,
+  "dropped_missing_target_rows": 0,
+  "feature_columns": [
+    "mean radius",
+    "mean texture",
+    "mean perimeter",
+    "mean area",
+    "mean smoothness",
+    "mean compactness",
+    "mean concavity",
+    "mean concave points",
+    "mean symmetry",
+    "mean fractal dimension",
+    "radius error",
+    "texture error",
+    "perimeter error",
+    "area error",
+    "smoothness error",
+    "compactness error",
+    "concavity error",
+    "concave points error",
+    "symmetry error",
+    "fractal dimension error",
+    "worst radius",
+    "worst texture",
+    "worst perimeter",
+    "worst area",
+    "worst smoothness",
+    "worst compactness",
+    "worst concavity",
+    "worst concave points",
+    "worst symmetry",
+    "worst fractal dimension"
+  ],
+  "categorical_columns": [],
+  "missing_value_columns": {},
+  "classes": [
+    "benign",
+    "malignant"
+  ],
+  "class_counts": {
+    "benign": 214,
+    "malignant": 127
+  },
+  "majority_class_share": 0.6275659824046921
+}
+findings: [{'input': 'too-few-rows-probe', 'verdict': 'rejected', 'message': 'need at least 50 labelled rows, got 49'}]
+{'dropped_missing_target_rows': {'train': 0, 'holdout': 0, 'test': 0}, 'unseen_categorical_values': {'holdout': {}, 'test': {}}, 'encoded_categoricals': []}
+{'train': 341, 'holdout': 114, 'test': 114, 'features': 30, 'classes': ['benign', 'malignant'], 'training_class_shares': {'benign': 0.628, 'malignant': 0.372}}
+majority-class baseline on the holdout {'accuracy': 0.6228, 'balanced_accuracy': 0.5, 'f1_weighted': 0.478, 'log_loss': 0.6627, 'roc_auc': nan}
+[colab] Executing cell 7/11 - tabiclv2_classifier-20...
+Running stage 'condition' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/bd441f8594d3/logs/condition.log
+/tmp/dimer_uv/venv-c364e6a779ced5aa/lib/python3.12/site-packages/sklearn/metrics/_classification.py:304: UserWarning: The y_prob values do not sum to one. Make sure to pass probabilities.
+  warnings.warn(
+/tmp/dimer_uv/venv-c364e6a779ced5aa/lib/python3.12/site-packages/sklearn/metrics/_classification.py:304: UserWarning: The y_prob values do not sum to one. Make sure to pass probabilities.
+  warnings.warn(
+pretrained holdout {'accuracy': 0.9825, 'balanced_accuracy': 0.9767, 'f1_weighted': 0.9824, 'log_loss': 0.0409, 'roc_auc': 0.9993}
+pretrained independent test {'accuracy': 0.9912, 'balanced_accuracy': 0.9881, 'f1_weighted': 0.9912, 'log_loss': 0.0536, 'roc_auc': 0.996}
+Baseline val accuracy: 0.9825
+Fine-tune:   0%|          | 0/3 [00:00<?, ?it/s]
+Fine-tune:   0%|          | 0/3 [00:00<?, ?it/s, train_loss=0.0328, val_accuracy=0.9825, best=0.9825, s/epoch=0.6]
+Fine-tune:  33%|███▎      | 1/3 [00:01<00:02,  1.43s/it, train_loss=0.0328, val_accuracy=0.9825, best=0.9825, s/epoch=0.6]
+Fine-tune:  33%|███▎      | 1/3 [00:01<00:02,  1.43s/it, train_loss=0.0703, val_accuracy=0.9825, best=0.9825, s/epoch=0.1]
+Fine-tune:  33%|███▎      | 1/3 [00:02<00:05,  2.67s/it, train_loss=0.0703, val_accuracy=0.9825, best=0.9825, s/epoch=0.1]
+/tmp/dimer_uv/venv-c364e6a779ced5aa/lib/python3.12/site-packages/sklearn/metrics/_classification.py:304: UserWarning: The y_prob values do not sum to one. Make sure to pass probabilities.
+  warnings.warn(
+/tmp/dimer_uv/venv-c364e6a779ced5aa/lib/python3.12/site-packages/sklearn/metrics/_classification.py:304: UserWarning: The y_prob values do not sum to one. Make sure to pass probabilities.
+  warnings.warn(
+candidate holdout {'accuracy': 0.9825, 'balanced_accuracy': 0.9767, 'f1_weighted': 0.9824, 'log_loss': 0.0409, 'roc_auc': 0.9993}
+{'recommended_for_export': 'pretrained', 'selection_basis': 'holdout:accuracy', 'fine_tune': {'requested': True, 'ran': True, 'epochs_requested': 3, 'time_limit_seconds': 300, 'checkpoint_bytes': 331004321, 'early_stopping_best_holdout_metric': 0.9824561403508771}, 'device': 'cuda', 'classes_': ['benign', 'malignant']}
+[colab] Executing cell 8/11 - tabiclv2_classifier-23...
+Running stage 'report' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/bd441f8594d3/logs/report.log
+/tmp/dimer_uv/venv-c364e6a779ced5aa/lib/python3.12/site-packages/sklearn/metrics/_classification.py:304: UserWarning: The y_prob values do not sum to one. Make sure to pass probabilities.
+  warnings.warn(
+{'holdout_rows': 114, 'one_row_resolution_pct': 0.88}
+tabicl_pretrained    accuracy=0.9825 errors=2 roc_auc=0.9993 log_loss=0.0409
+lightgbm             accuracy=0.9649 errors=4 roc_auc=0.9980 log_loss=0.1006
+random_forest        accuracy=0.9561 errors=5 roc_auc=0.9956 log_loss=0.0968
+{'latency_ms_median_of_5': {'tabicl': 323.69, 'lightgbm': 1.92, 'random_forest': 9.06}, 'rows': 114, 'device': 'cuda'}
+/tmp/dimer_uv/venv-c364e6a779ced5aa/lib/python3.12/site-packages/sklearn/metrics/_classification.py:304: UserWarning: The y_prob values do not sum to one. Make sure to pass probabilities.
+  warnings.warn(
+{'blend_objective': 'maximise holdout accuracy', 'weight_tabicl': 0.75, 'tied_weights': 51, 'tied_weight_range': [0.5, 1.0], 'blend_holdout': {'accuracy': 0.9825, 'balanced_accuracy': 0.9767, 'f1_weighted': 0.9824, 'log_loss': 0.044, 'roc_auc': 0.9997}, 'accuracy_delta_vs_tabicl': 0.0}
+Holdout accuracy is the same for every blend weight from 0.50 to 1.00 (51 grid points); the selected weight 0.75 is not uniquely informative.
+/tmp/dimer_uv/venv-c364e6a779ced5aa/lib/python3.12/site-packages/sklearn/metrics/_classification.py:304: UserWarning: The y_prob values do not sum to one. Make sure to pass probabilities.
+  warnings.warn(
+/tmp/dimer_uv/venv-c364e6a779ced5aa/lib/python3.12/site-packages/sklearn/metrics/_classification.py:304: UserWarning: The y_prob values do not sum to one. Make sure to pass probabilities.
+  warnings.warn(
+{'independent_test': {'tabicl': {'accuracy': 0.9912, 'balanced_accuracy': 0.9881, 'f1_weighted': 0.9912, 'log_loss': 0.0536, 'roc_auc': 0.996}, 'lightgbm': {'accuracy': 0.9737, 'balanced_accuracy': 0.9643, 'f1_weighted': 0.9735, 'log_loss': 0.1004, 'roc_auc': 0.9937}, 'blend': {'accuracy': 0.9825, 'balanced_accuracy': 0.9762, 'f1_weighted': 0.9824, 'log_loss': 0.0562, 'roc_auc': 0.9954}}}
+{
+  "verdict": "sample-sanity",
+  "reason": "114 labelled holdout row(s) from one seeded stratified split; tutorial evidence, not a benchmark",
+  "decision_rule": "argmax",
+  "selection": "holdout:accuracy",
+  "n_holdout": 114,
+  "n_test": 114,
+  "interpretation": "One holdout row is 0.0088 of accuracy (114 rows); differences of a row or two between models are within that resolution, and no dispersion over splits was measured."
+}
+[colab] Executing cell 9/11 - tabiclv2_classifier-26...
+Running stage 'predict' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/bd441f8594d3/logs/predict.log
+No new-data file: the first eight holdout rows (already scored in Section 7) are scored instead; their unlabelled copy is written to outputs/tabiclv2_classifier_new_rows.csv
+ row_id  mean radius  mean texture  mean perimeter  mean area  mean smoothness  mean compactness  mean concavity  mean concave points  mean symmetry  mean fractal dimension  radius error  texture error  perimeter error  area error  smoothness error  compactness error  concavity error  concave points error  symmetry error  fractal dimension error  worst radius  worst texture  worst perimeter  worst area  worst smoothness  worst compactness  worst concavity  worst concave points  worst symmetry  worst fractal dimension prediction  probability_benign  probability_malignant
+    480       12.160         18.03           78.29      455.3           0.0909            0.0784          0.0292               0.0153         0.1464                  0.0628        0.2194         1.1900            1.678      16.260            0.0049             0.0167           0.0140                0.0052          0.0145                   0.0019         13.34          27.87            88.83       547.4            0.1208             0.2279           0.1620                0.0569          0.2406                   0.0773     benign              0.9999                 0.0001
+    294       12.720         13.78           81.78      492.1           0.0967            0.0839          0.0129               0.0192         0.1638                  0.0610        0.1807         0.6931            1.340      13.380            0.0061             0.0118           0.0066                0.0080          0.0137                   0.0014         13.50          17.48            88.54       553.7            0.1298             0.1472           0.0523                0.0634          0.2369                   0.0692     benign              1.0000                 0.0000
+    548        9.683         19.34           61.05      285.7           0.0849            0.0503          0.0234               0.0096         0.1580                  0.0624        0.2957         1.3630            2.054      18.240            0.0074             0.0112           0.0234                0.0096          0.0220                   0.0042         10.93          25.59            69.10       364.2            0.1199             0.0955           0.0935                0.0385          0.2552                   0.0792     benign              1.0000                 0.0000
+    531       11.670         20.02           75.21      416.2           0.1016            0.0945          0.0420               0.0216         0.1859                  0.0646        0.2067         0.8745            1.393      15.340            0.0053             0.0173           0.0184                0.0053          0.0145                   0.0027         13.35          28.81            87.00       550.6            0.1550             0.2964           0.2758                0.0812          0.3206                   0.0895     benign              0.9929                 0.0071
+    418       12.700         12.17           80.88      495.0           0.0878            0.0579          0.0236               0.0240         0.1583                  0.0628        0.2253         0.6457            1.527      17.370            0.0061             0.0126           0.0091                0.0082          0.0171                   0.0044         13.65          16.92            88.12       566.9            0.1314             0.1607           0.0938                0.0822          0.2775                   0.0946     benign              1.0000                 0.0000
+    362       12.760         18.84           81.87      496.6           0.0968            0.0795          0.0269               0.0178         0.1759                  0.0618        0.2213         1.2850            1.535      17.260            0.0056             0.0165           0.0153                0.0100          0.0191                   0.0021         13.75          25.99            87.82       579.7            0.1298             0.1839           0.1255                0.0831          0.2744                   0.0724     benign              1.0000                 0.0000
+    185       10.080         15.11           63.76      317.5           0.0927            0.0470          0.0016               0.0024         0.1703                  0.0605        0.4245         1.2680            2.680      26.430            0.0144             0.0120           0.0016                0.0024          0.0254                   0.0035         11.87          21.18            75.39       437.0            0.1521             0.1019           0.0069                0.0104          0.2933                   0.0770     benign              0.9998                 0.0002
+    101        6.981         13.43           43.79      143.5           0.1170            0.0757          0.0000               0.0000         0.1930                  0.0782        0.2241         1.5080            1.553       9.833            0.0102             0.0108           0.0000                0.0000          0.0266                   0.0041          7.93          19.54            50.41       185.2            0.1584             0.1202           0.0000                0.0000          0.2932                   0.0938     benign              0.9996                 0.0004
+[colab] Executing cell 10/11 - tabiclv2_classifier-29...
+Running stage 'export' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/bd441f8594d3/logs/export.log
+{'artifact_zip': '/content/outputs/tabiclv2_classifier_artifact.zip', 'zip_sha256': 'a20368cdb26cb30250534d57a0f00bb0465824eab57eaa7c1305daa723f6a6b8', 'mode': 'pretrained', 'checkpoint_bytes': 110368038, 'training_context_sha256': '76bc9526fd1722abcf324ff7cf3ea7d990abd2a9e4c43c228fb828c667bcb04e', 'matches_pinned_sample_context': True}
+Trusted digest for the companion notebook: set EXPECTED_ZIP_SHA256 = 'a20368cdb26cb30250534d57a0f00bb0465824eab57eaa7c1305daa723f6a6b8' when you hand it tabiclv2_classifier_artifact.zip.
+Running stage 'reload' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/bd441f8594d3/logs/reload.log
+{'reload_dir': '/content/outputs/artifact-reload', 'process': 'fresh (separate from the exporting stage)', 'labels_identical': True, 'max_abs_probability_difference': 0.0}
+PASS: bundle extracted safely, digests verified, classifier rebuilt from the bundle alone; labels identical and probabilities equivalent (rtol=1e-05, atol=1e-07).
+[colab] Executing cell 11/11 - tabiclv2_classifier-32...
+Optional activity skipped: tick RUN_ACTIVITY to run it. The canonical outputs are complete.
+[colab] Saving notebook with outputs to '/home/kurt/colab-runs/tabicl-classifier-pipeline-f59e233-846791/tabiclv2_classifier_colab_f59e233_colab-cli-t4_output.ipynb'...
