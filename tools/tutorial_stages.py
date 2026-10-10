@@ -405,7 +405,12 @@ def stage_condition(run: Run) -> None:
         candidate.fit(X_train, y_train)
         candidate_holdout = score(P, candidate, holdout, enc)
         candidate_test = score(P, candidate, test, enc) if test is not None else None
-        fine_tune.update(ran=True, epochs_requested=epochs, time_limit_seconds=FINE_TUNE["time_limit"], checkpoint_bytes=best.stat().st_size)
+        # tabicl 2.1.1 keeps the best holdout value its early stopping selected on (measured with n_estimators_validation=1,
+        # so not comparable with the 8-member scores below; the baseline when no epoch improved). It does not expose the
+        # best epoch: the per-epoch values are in this stage's log (the "Fine-tune" progress line).
+        best_metric = getattr(finetuner, "_best_metric_", None)
+        best_metric = float(best_metric) if best_metric is not None and math.isfinite(float(best_metric)) else None
+        fine_tune.update(ran=True, epochs_requested=epochs, time_limit_seconds=FINE_TUNE["time_limit"], checkpoint_bytes=best.stat().st_size, early_stopping_best_holdout_metric=best_metric)
         print("candidate holdout", rounded(candidate_holdout))
         if len(holdout) < MIN_SELECTION_HOLDOUT_ROWS:
             selection = f"default:pretrained; holdout-too-small:{len(holdout)}<{MIN_SELECTION_HOLDOUT_ROWS}"

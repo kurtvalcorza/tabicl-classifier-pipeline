@@ -220,6 +220,9 @@ def test_M2_fine_tuning_runs_on_the_default_path_bounded_and_cpu_skip_is_recorde
     assert 'fine_tune["skipped"] = "no CUDA device' in body and "raise RuntimeError('TabICLv2 fine-tuning requires CUDA')" not in body
     assert "time_limit=FINE_TUNE[\"time_limit\"]" in body and "patience=FINE_TUNE[\"patience\"]" in body
     assert 'selection = f"holdout:{metric}"' in body and "MIN_SELECTION_HOLDOUT_ROWS" in body
+    # TIC-M2 acceptance (fixer, 2026-10-11): the hosted record carries the early-stopping value selected on, not only
+    # the epoch budget (tabicl 2.1.1 keeps it as _best_metric_ and exposes no best epoch).
+    assert 'getattr(finetuner, "_best_metric_", None)' in body and "early_stopping_best_holdout_metric=best_metric" in body
     run_all = _nb(E2E)["cells"][0]
     assert "bounded to 3 epochs and 5 minutes" in _src(run_all)
 

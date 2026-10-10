@@ -1,6 +1,8 @@
 # Notebook release evidence
 
-Release-grade notebook execution is verified by the `notebook-release-execution` job in `.github/workflows/ci.yml`.
+> **Retired.** This page describes the former `notebook-release-execution` CI job, which executed the repository-installing notebook pair. That job no longer exists: the current `release-notebook-execution` job in `.github/workflows/ci.yml` executes nothing and only states the evidence boundary. Nothing below is current evidence; the release record is [`../docs/release-verification.md`](../docs/release-verification.md).
+
+Release-grade notebook execution was verified by the former `notebook-release-execution` job.
 
 For each pull-request head, the job writes and uploads:
 

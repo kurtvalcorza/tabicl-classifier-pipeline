@@ -124,13 +124,31 @@ they are measurements for the stated runtime, not general estimates.
 
 | Date (UTC) | Commit / notebook blob | Executor | Path exercised | Wall | Outcome |
 |---|---|---|---|---|---|
-| 2026-09-14 | `b1705c6` / `f1b597a0b6ad` | Kaggle T4 (`kurtvalcorza/dimer-nb2-tabiclv2-classifier` v1) | Default sample path | 251.4 s | **PASSED** — 9/9 ok code cells executed cleanly, 5 files, 110 MB staged |
-| | | | Standalone ARTIFACT-INFERENCE with an external bundle | | pending — queued to the GPU lane |
+| 2026-09-14 | `b1705c6` / `f1b597a0b6ad` | Kaggle T4 (`kurtvalcorza/dimer-nb2-tabiclv2-classifier` v1) | Default sample path of an **earlier** E2E blob (spec 1.1 carrier, in-kernel install) | 251.4 s | **PASSED** — 9/9 ok code cells, 5 files, 110 MB staged. Kaggle image, runtime package versions and the `restarted` flag were not recorded and no metrics were captured. History only: not evidence for the current blobs (REL14) |
+| | E2E `051c81e9d8fd` | Colab T4 | Default path incl. bounded fine-tuning, then the companion | | pending — queued to the T4 runner |
+| | companion `cb92a9e84376` | Colab T4 | Default path (pinned sample bundle, no dialog) | | pending — queued to the T4 runner |
+
+### Local lock-only drives (not clean-runtime evidence)
+
+These are development checks of the current source, run with the notebooks' own install cell (the hash lock, CPython
+3.12.12, `--require-hashes --only-binary :all:`) and every code cell driven in order by a plain-CPython stand-in kernel,
+GPU hidden (`CUDA_VISIBLE_DEVICES=-1`), real pinned checkpoint (`bdc7dbd5…`, staged from a local copy, so the Hub download
+was not exercised). They are not hosted runs and do not change the status.
+
+| Date (UTC) | Source | Path | Wall | Result |
+|---|---|---|---|---|
+| 2026-10-11 | E2E `051c81e9d8fd` (generated at `fba80c6`) | defaults + `RUN_ACTIVITY` (Wine) on CPU | 186 s (environment reused; first build 408 s) | 11/11 cells. Fine-tuning skipped with the recorded CPU reason. Holdout (114 rows): TabICLv2 accuracy 0.9825 (2 errors), ROC-AUC 0.9993, log loss 0.0409; LightGBM 0.9649 (4 errors); random forest 0.9561 (5 errors); majority 0.6228. Independent test: TabICLv2 0.9912, LightGBM 0.9737. Blend ties over weights 0.50–1.00. `matches_pinned_sample_context: True`; fresh-process reload PASS (max prob. diff 1.1e-10). Wine activity: 36 holdout rows, accuracy 0.9722 vs majority 0.3889 |
+| 2026-10-11 | E2E fine-tuning branch, CPU stand-in for CUDA | the `condition` stage with `torch.cuda.is_available` patched for that stage only and `device='cpu'`, 1 epoch | 59 s | branch completes with the locked `tabicl` 2.1.1: `best.ckpt` only (331 MB), `selection: holdout:accuracy`, candidate holdout = pretrained, export stays `pretrained`. API check only; the T4 run is the first real execution |
+| 2026-10-11 | companion `cb92a9e84376` | defaults (pinned sample bundle and rows) | 21 s | 9/9 cells, no dialog, `trusted_digest: verified`, checkpoint bound to the base; labels identical to the E2E run on the same eight rows, max prob. diff 1.1e-10 |
+| 2026-10-11 | companion (previous blob, same stages) | the E2E ZIP by `ARTIFACT_ZIP_PATH` + its printed digest + its `new_rows.csv`, `RUN_ACTIVITY` | 66 s | 9/9 cells, `trusted_digest: verified (EXPECTED_ZIP_SHA256)`, `sample_kind: BYOD`, same predictions |
+
+On a generic Linux kernel the `report` stage needs the system OpenMP library (`libgomp.so.1`, Debian/Ubuntu `libgomp1`)
+for LightGBM; Colab and Kaggle images have it. The local drives supplied it from the locked `torch` wheel.
 
 ## Current status
 
-No clean-runtime execution of the standalone notebooks has been recorded yet; both runs are **pending** and queued to the
-GPU lane. Static validation (`tools/validate_release_assets.py`), nbformat validation, a `compile()` sweep over every code
+No clean-runtime execution of the current standalone blobs has been recorded; the 2026-09-14 Kaggle row is history for an
+earlier blob, and both current runs are **pending** and queued to the T4 runner. Static validation (`tools/validate_release_assets.py`), nbformat validation, a `compile()` sweep over every code
 cell, and the offline unit suite passed on the tutorial source at the candidate revision, which is necessary but not
 sufficient. The registry status remains **Candidate** until a reviewer confirms a recorded run against the notebook blobs
 under review and an integrator promotes it; promotion is not performed by the builder. Facts a reviewer should weigh:
