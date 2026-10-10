@@ -1,0 +1,128 @@
+[colab] Parsing notebook '/home/kurt/colab-runs/tabicl-classifier-pipeline-f59e233-a9c7c9/tabiclv2_classifier_artifact_inference_colab_f59e233_colab-cli-t4.ipynb'...
+[colab] Executing cell 1/9 - Infrastructure: check the runtime, accelerator and disk; create (or keep) the run directory...
+{'accelerator': 'Tesla T4, 15360 MiB', 'kernel_python': '3.13.15', 'run_directory': '/content/dimer_runs/tabiclv2_classifier_artifact_inference/e0930ce4ebd1', 'outputs': '/content/outputs', 'weights': '/content/weights', 'environment_root': '/tmp/dimer_uv', 'free_gib': {'weights': 193.3, 'environment': 193.3}}
+[colab] Executing cell 2/9 - Infrastructure: write and verify the carried package, stage runner, lock, manifest and samples...
+{'carried_files': 11, 'verified': True, 'repository': 'kurtvalcorza/tabicl-classifier-pipeline', 'revision': 'fba80c60bf26a41fdc6a66d6a14608c9747b5b2c', 'generator': 'build_notebook.py/3.0-tabular'}
+[colab] Executing cell 3/9 - Infrastructure: build (or reuse) the isolated locked environment and define the stage runner...
+{'notebook_source': 'fba80c60bf26a41fdc6a66d6a14608c9747b5b2c', 'python': '3.12.12', 'torch': '2.14.0', 'tabicl': '2.1.1', 'numpy': '2.5.2', 'pandas': '3.0.5', 'scikit-learn': '1.9.0', 'lightgbm': '4.7.0', 'cuda': True, 'locked_packages': 90, 'environment': '/tmp/dimer_uv/venv-c364e6a779ced5aa', 'environment_reused': False, 'setup_seconds': 73}
+[colab] Executing cell 4/9 - Infrastructure: stage and digest-verify the pinned checkpoint...
+Running stage 'weights' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier_artifact_inference/e0930ce4ebd1/logs/weights.log
+{'model_id': 'jingang/TabICL', 'revision': '4dcd344ece2c00be9e831fdd35bed57b5ad83e19', 'license': 'bsd-3-clause', 'files': 1, 'total_bytes': 110368038}
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+{'weights_dir': '/content/weights/tabicl-classifier-v2', 'fetched': ['tabicl-classifier-v2-20260212.ckpt']}
+{'verified_files': 1, 'revision': '4dcd344ece2c00be9e831fdd35bed57b5ad83e19', 'sha256': ['bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0']}
+[colab] Executing cell 5/9 - tabiclv2_classifier_artifact_inference-14...
+Running stage 'artifact' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier_artifact_inference/e0930ce4ebd1/logs/artifact.log
+{'source': 'sample', 'zip': None, 'trusted_digest': 'verified (artifact.json against the pinned sample record)', 'mode': 'pretrained', 'checkpoint_binding': 'identical to the pinned base checkpoint (SHA-256 checked)'}
+{'selection': 'default:pretrained (offline sample build; no model run)', 'base': 'tabicl-classifier-v2-20260212.ckpt', 'base_revision': '4dcd344ece2c', 'producer_runtime': {'pythonVersion': '3.12.12', 'torchVersion': '2.14.0', 'note': "offline build by tools/build_sample_bundle.py: no model was run and torch was not imported; the versions are the pinned lock's"}}
+{'featureColumns': 30, 'targetColumn': 'target', 'classLabels': ['benign', 'malignant'], 'contextRows': 341, 'contextClassCounts': {'benign': 214, 'malignant': 127}, 'nEstimators': 8, 'categoricalEncoders': []}
+[colab] Executing cell 6/9 - tabiclv2_classifier_artifact_inference-17...
+Running stage 'reconstruct' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier_artifact_inference/e0930ce4ebd1/logs/reconstruct.log
+{'context_rows': 341, 'features': 30, 'classes_': ['benign', 'malignant'], 'device': 'cuda', 'source': 'artifact', 'checkpoint_binding': 'identical to the pinned base checkpoint (SHA-256 checked)'}
+[colab] Executing cell 7/9 - tabiclv2_classifier_artifact_inference-20...
+Running stage 'rows' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier_artifact_inference/e0930ce4ebd1/logs/rows.log
+{'ceilings': {'MIN_TRAIN_ROWS': 50, 'MAX_TRAIN_ROWS': 50000, 'MAX_FEATURES': 2000, 'MIN_CLASSES': 2}, 'decision_rule': 'argmax', 'required_features': 30, 'class_labels': ['benign', 'malignant']}
+{
+  "schema": {
+    "input": "pandas.DataFrame, one row per example; numeric/categorical features plus a categorical target",
+    "columns": "unique names; non-numeric feature columns are ordinal-encoded with maps fitted on training",
+    "target": "any label type; rows whose target is missing are dropped and counted; at least MIN_CLASSES distinct classes, and every holdout/test class must be present in the support rows",
+    "train_rows": [
+      50,
+      50000
+    ],
+    "eval_rows": [
+      2,
+      null
+    ],
+    "features": [
+      1,
+      2000
+    ],
+    "classes": [
+      2,
+      null
+    ],
+    "rows_per_class_for_stratified_split": [
+      2,
+      null
+    ],
+    "inference_input": "every fitted feature column present; no `prediction` or `probability_*` column; extras pass through",
+    "decision_rule": "argmax",
+    "preprocessing": "no scaling by the package; unseen or missing categorical values map to the fitted 'unknown' code; the model is conditioned on the (encoded) training rows at prediction time"
+  },
+  "inputs": [
+    {
+      "id": "new_rows.csv",
+      "mode": "inference",
+      "rows": 8,
+      "feature_columns": [
+        "mean radius",
+        "mean texture",
+        "mean perimeter",
+        "mean area",
+        "mean smoothness",
+        "mean compactness",
+        "mean concavity",
+        "mean concave points",
+        "mean symmetry",
+        "mean fractal dimension",
+        "radius error",
+        "texture error",
+        "perimeter error",
+        "area error",
+        "smoothness error",
+        "compactness error",
+        "concavity error",
+        "concave points error",
+        "symmetry error",
+        "fractal dimension error",
+        "worst radius",
+        "worst texture",
+        "worst perimeter",
+        "worst area",
+        "worst smoothness",
+        "worst compactness",
+        "worst concavity",
+        "worst concave points",
+        "worst symmetry",
+        "worst fractal dimension"
+      ],
+      "extra_columns": [
+        "row_id"
+      ],
+      "missing_value_columns": {}
+    }
+  ],
+  "target_column": null,
+  "min_rows": null,
+  "verdict": "accepted",
+  "findings": [
+    {
+      "input": "missing-column-probe",
+      "verdict": "rejected",
+      "message": "Inference CSV missing features: ['mean radius']"
+    }
+  ],
+  "model_id": "jingang/TabICL",
+  "model_revision": "4dcd344ece2c00be9e831fdd35bed57b5ad83e19"
+}
+[colab] Executing cell 8/9 - tabiclv2_classifier_artifact_inference-23...
+Running stage 'predict' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier_artifact_inference/e0930ce4ebd1/logs/predict.log
+ row_id  mean radius  mean texture  mean perimeter  mean area  mean smoothness  mean compactness  mean concavity  mean concave points  mean symmetry  mean fractal dimension  radius error  texture error  perimeter error  area error  smoothness error  compactness error  concavity error  concave points error  symmetry error  fractal dimension error  worst radius  worst texture  worst perimeter  worst area  worst smoothness  worst compactness  worst concavity  worst concave points  worst symmetry  worst fractal dimension prediction  probability_benign  probability_malignant
+    480       12.160         18.03           78.29      455.3           0.0909            0.0784          0.0292               0.0153         0.1464                  0.0628        0.2194         1.1900            1.678      16.260            0.0049             0.0167           0.0140                0.0052          0.0145                   0.0019         13.34          27.87            88.83       547.4            0.1208             0.2279           0.1620                0.0569          0.2406                   0.0773     benign              0.9999                 0.0001
+    294       12.720         13.78           81.78      492.1           0.0967            0.0839          0.0129               0.0192         0.1638                  0.0610        0.1807         0.6931            1.340      13.380            0.0061             0.0118           0.0066                0.0080          0.0137                   0.0014         13.50          17.48            88.54       553.7            0.1298             0.1472           0.0523                0.0634          0.2369                   0.0692     benign              1.0000                 0.0000
+    548        9.683         19.34           61.05      285.7           0.0849            0.0503          0.0234               0.0096         0.1580                  0.0624        0.2957         1.3630            2.054      18.240            0.0074             0.0112           0.0234                0.0096          0.0220                   0.0042         10.93          25.59            69.10       364.2            0.1199             0.0955           0.0935                0.0385          0.2552                   0.0792     benign              1.0000                 0.0000
+    531       11.670         20.02           75.21      416.2           0.1016            0.0945          0.0420               0.0216         0.1859                  0.0646        0.2067         0.8745            1.393      15.340            0.0053             0.0173           0.0184                0.0053          0.0145                   0.0027         13.35          28.81            87.00       550.6            0.1550             0.2964           0.2758                0.0812          0.3206                   0.0895     benign              0.9929                 0.0071
+    418       12.700         12.17           80.88      495.0           0.0878            0.0579          0.0236               0.0240         0.1583                  0.0628        0.2253         0.6457            1.527      17.370            0.0061             0.0126           0.0091                0.0082          0.0171                   0.0044         13.65          16.92            88.12       566.9            0.1314             0.1607           0.0938                0.0822          0.2775                   0.0946     benign              1.0000                 0.0000
+    362       12.760         18.84           81.87      496.6           0.0968            0.0795          0.0269               0.0178         0.1759                  0.0618        0.2213         1.2850            1.535      17.260            0.0056             0.0165           0.0153                0.0100          0.0191                   0.0021         13.75          25.99            87.82       579.7            0.1298             0.1839           0.1255                0.0831          0.2744                   0.0724     benign              1.0000                 0.0000
+    185       10.080         15.11           63.76      317.5           0.0927            0.0470          0.0016               0.0024         0.1703                  0.0605        0.4245         1.2680            2.680      26.430            0.0144             0.0120           0.0016                0.0024          0.0254                   0.0035         11.87          21.18            75.39       437.0            0.1521             0.1019           0.0069                0.0104          0.2933                   0.0770     benign              0.9998                 0.0002
+    101        6.981         13.43           43.79      143.5           0.1170            0.0757          0.0000               0.0000         0.1930                  0.0782        0.2241         1.5080            1.553       9.833            0.0102             0.0108           0.0000                0.0000          0.0266                   0.0041          7.93          19.54            50.41       185.2            0.1584             0.1202           0.0000                0.0000          0.2932                   0.0938     benign              0.9996                 0.0004
+{
+  "verdict": "not-measurable",
+  "sample_kind": "sample",
+  "reason": "no labelled holdout rows were supplied for the scored table"
+}
+[colab] Executing cell 9/9 - tabiclv2_classifier_artifact_inference-26...
+Optional activity skipped: tick RUN_ACTIVITY to run it. The canonical outputs are complete.
+[colab] Saving notebook with outputs to '/home/kurt/colab-runs/tabicl-classifier-pipeline-f59e233-a9c7c9/tabiclv2_classifier_artifact_inference_colab_f59e233_colab-cli-t4_output.ipynb'...

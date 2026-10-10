@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Repository-specific static checks for the standalone tutorials (NOTEBOOK_SPEC 2.0).
+"""Repository-specific static checks for the standalone tutorials (NOTEBOOK_SPEC 2.2).
 
 The carrier, parity, hygiene and profile checks live in ``tools/validate_release_assets.py`` (run first). This
 script keeps the invariants that are specific to this repository's release contract: the exact PEP 517 build
-backend, the release requirement/lock files and their agreement with the ``pyproject.toml`` runtime pins the
-notebooks carry, the fine-tuning gate, the serving-bundle hardening markers, and the executor's evidence contract.
-It claims no runtime execution evidence.
+backend, the release requirement/lock files and their agreement with the ``pyproject.toml`` runtime pins, the
+hash lock the notebooks carry, the fine-tuning gate, the serving-bundle hardening markers, and the executor's
+evidence contract. The notebooks carry the package and a stage runner as text in one carrier cell
+(``metadata.dimer.embedded_sources``); the "own code" checked here is the notebook's kernel cells plus the carried
+stage runner, and the "all text" adds the carried package. It claims no runtime execution evidence.
 """
 # ruff: noqa: E501  -- rule messages name the requirement in full; they are kept on one line
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
@@ -21,6 +24,7 @@ INFERENCE = ROOT / "tutorials" / "tabiclv2_classifier_artifact_inference_colab.i
 README = ROOT / "tutorials" / "README.md"
 REQ = ROOT / "tutorials" / "requirements-release.in"
 LOCK = ROOT / "tutorials" / "requirements-release.lock"
+COLAB_LOCK = ROOT / "tutorials" / "requirements-colab.lock.txt"
 PYPROJECT = ROOT / "pyproject.toml"
 API = ROOT / "src" / "tabicl_classifier_pipeline" / "api.py"
 EXECUTOR = ROOT / "scripts" / "execute_notebook_release_paths.py"
@@ -41,18 +45,35 @@ def load_nb(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _source(cell: dict) -> str:
+    return "".join(cell["source"]) if isinstance(cell["source"], list) else cell["source"]
+
+
+def _is_carrier(cell: dict) -> bool:
+    return bool(cell.get("metadata", {}).get("dimer", {}).get("embedded_sources"))
+
+
+def carried(nb: dict) -> dict[str, str]:
+    """The CARRIED_FILES literal of the notebook's single carrier cell."""
+    cells = [c for c in nb["cells"] if c.get("cell_type") == "code" and _is_carrier(c)]
+    require(len(cells) == 1, "exactly one carrier cell (metadata.dimer.embedded_sources) is required")
+    for node in ast.parse(_source(cells[0])).body:
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "CARRIED_FILES":
+            return ast.literal_eval(node.value)
+    raise AssertionError("the carrier cell does not assign CARRIED_FILES")
+
+
 def text(nb: dict) -> str:
-    return "\n".join("".join(c["source"]) if isinstance(c["source"], list) else c["source"] for c in nb["cells"])
+    """Every non-carrier cell plus every carried text file."""
+    own = [_source(c) for c in nb["cells"] if not _is_carrier(c)]
+    return "\n".join(own + list(carried(nb).values()))
 
 
 def code_text(nb: dict, *, outside_modules: bool = False) -> str:
-    parts = []
-    for c in nb["cells"]:
-        if c.get("cell_type") != "code":
-            continue
-        if outside_modules and c.get("metadata", {}).get("dimer", {}).get("embedded_module"):
-            continue
-        parts.append("".join(c["source"]) if isinstance(c["source"], list) else c["source"])
+    """The notebook's code cells; with outside_modules, its own kernel cells plus the carried stage runner."""
+    parts = [_source(c) for c in nb["cells"] if c.get("cell_type") == "code" and not (outside_modules and _is_carrier(c))]
+    if outside_modules:
+        parts.append(carried(nb)["tutorial_stages.py"])
     return "\n".join(parts)
 
 
@@ -70,13 +91,14 @@ main_own, inf_own = code_text(main_nb, outside_modules=True), code_text(inf_nb, 
 for nb, profile, label in ((main_nb, "E2E", "main"), (inf_nb, "ARTIFACT-INFERENCE", "artifact")):
     dimer = nb.get("metadata", {}).get("dimer", {})
     require(dimer.get("notebook_profile") == profile, f"{label} profile metadata")
-    require(dimer.get("notebook_spec") == "2.0" and dimer.get("standalone") is True, f"{label} must be standalone spec 2.0")
+    require(dimer.get("notebook_spec") == "2.2" and dimer.get("standalone") is True, f"{label} must be standalone spec 2.2")
 for marker in ("**Profile:** `E2E`", "**This notebook is standalone.**", "## Interpretation and limits"):
     require(marker in main_all, f"main missing {marker!r}")
 for marker in ("**Profile:** `ARTIFACT-INFERENCE`", "**This notebook is standalone.**", "## Interpretation and limits"):
     require(marker in inf_all, f"artifact missing {marker!r}")
 
-# Reproducible environment: the notebooks carry pyproject's pins; the release files stay consistent with them.
+# Reproducible environment: the notebooks carry the hash lock compiled from pyproject's pins; the release files stay
+# consistent with the same pins.
 require(REQ.exists() and LOCK.exists(), "release requirements/lock missing")
 req_lines = [line.strip() for line in REQ.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
 lock_lines = [line.strip() for line in LOCK.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
@@ -100,8 +122,15 @@ for name, version in pins.items():
     if name in locked:
         require(locked[name] == version, f"pyproject pin {name}=={version} disagrees with requirements-release.lock ({locked[name]})")
 require(pins.get("torch") == "2.14.0", "torch must be pinned to the release-verified 2.14.0")
-pins_cell = re.search(r"^PINS = \[(.*?)^\]", code_text(main_nb), re.M | re.S)
-require(pins_cell is not None and "'torch==2.14.0'" in pins_cell.group(1), "main notebook must carry torch==2.14.0")
+require(COLAB_LOCK.exists(), "tutorials/requirements-colab.lock.txt (the hash lock the notebooks carry) is missing")
+colab_lock = COLAB_LOCK.read_text(encoding="utf-8")
+require(re.search(r"^torch==2\.14\.0 ", colab_lock, re.M) is not None, "requirements-colab.lock.txt must pin torch==2.14.0")
+colab_locked = {m.group(1).lower(): m.group(2) for m in re.finditer(r"^([A-Za-z0-9._-]+)==([^\s\\]+)", colab_lock, re.M)}
+for name, version in pins.items():
+    require(colab_locked.get(name) == version, f"requirements-colab.lock.txt does not pin {name}=={version} (found {colab_locked.get(name)})")
+require("--hash=sha256:" in colab_lock, "requirements-colab.lock.txt must carry hashes")
+for nb, label in ((main_nb, "main"), (inf_nb, "artifact")):
+    require(carried(nb).get("requirements.txt") == colab_lock.replace("\r\n", "\n"), f"{label} notebook must carry requirements-colab.lock.txt verbatim")
 
 # G2: core model operations flow through the carried public API; no direct tabicl use in the notebooks' own cells.
 api_source = API.read_text(encoding="utf-8")
@@ -110,25 +139,28 @@ for marker in ("def create_classifier", "def create_finetuned_classifier", "def 
 for own, label in ((main_own, "main"), (inf_own, "artifact")):
     require("from tabicl import" not in own and "import tabicl" not in own, f"{label} bypasses the carried API with a direct tabicl import")
     require("from tabicl_classifier_pipeline" not in own, f"{label} imports the repository package (ST1)")
-    require("TabICLClassificationPipeline.from_pretrained(weights_dir=WEIGHTS_DIR" in own, f"{label} does not resolve the model through the carried API")
-for marker in ("create_finetuned_classifier(", "fine_tune_classifier(", "pipe.fit(X_train, y_train)", "ACTIVE_MODEL.predict(", "ACTIVE_MODEL.predict_proba(", "compare_metric("):
+    require("P.verify_snapshot(snapshot)" in own, f"{label} does not verify the pinned snapshot through the carried API")
+require("TabICLClassificationPipeline.from_pretrained(weights_dir=run.weights / P.MODEL_KEY" in main_own, "main does not resolve the model through the carried API")
+for marker in ("create_finetuned_classifier(", "fine_tune_classifier(", "pipe.fit(X_train, y_train)", "model.predict(", "model.predict_proba(", "compare_metric("):
     require(marker in main_own, f"main does not exercise repository API operation {marker}")
 for marker in ("create_classifier(", "serving.fit(", "serving.predict(", "serving.predict_proba(", "validate_artifact_runtime(", "safe_extract_zip(", "verify_artifact_bundle("):
     require(marker in inf_own, f"artifact does not exercise repository API operation {marker}")
 
-# Optional fine-tuning is gated off by default, so statically protect its callable path.
-require("RUN_FINE_TUNING = False  # @param" in main_own, "fine-tune gate must default to False")
-require("finetuner = create_finetuned_classifier(" in main_own, "optional fine-tune constructor does not use repository API")
+# Fine-tuning is the pipeline's production adaptation and runs on the default path when CUDA is present (TIC-M2);
+# without CUDA the stage records why it was skipped. Statically protect its callable path and its guards.
+require("RUN_FINE_TUNING = True  # @param" in main_own, "fine-tune gate must default to True (TIC-M2)")
+require("finetuner = P.create_finetuned_classifier(" in main_own, "fine-tune constructor does not use repository API")
+require('"time_limit": 300' in main_own and '"epochs": 3' in main_own, "the default fine-tune must stay bounded (3 epochs, 300 s)")
 require(
-    "raise RuntimeError('TabICLv2 fine-tuning requires CUDA')\n    ft_dir = Path('outputs') / 'finetune'" in main_own,
-    "fine-tune workspace must be initialized after the CUDA guard, not inside its failure branch",
+    main_own.index("if run_ft and not torch.cuda.is_available():") < main_own.index('ft_dir = run.state / "finetune"'),
+    "fine-tune workspace must be initialized after the CUDA guard",
 )
 require("MIN_SELECTION_HOLDOUT_ROWS = 50" in main_own, "selection evidence guard missing")
 
 # Model / task provenance and semantics.
 for marker in (CHECKPOINT_NAME, MODEL_REVISION, CHECKPOINT_SHA256, ARTIFACT_FORMAT):
     require(marker in main_all, f"main missing provenance marker {marker!r}")
-for marker in ("'artifactFormat': ARTIFACT_FORMAT", "training_context.parquet", "checkpoints/best.ckpt", "artifact.json", "RUN_NEW_DATA_INFERENCE = False  # @param"):
+for marker in ('"artifactFormat": P.ARTIFACT_FORMAT', "training_context.parquet", "checkpoints/best.ckpt", "artifact.json", "RUN_NEW_DATA_INFERENCE = False  # @param"):
     require(marker in main_own, f"main code missing {marker!r}")
 for marker in ("classification_metrics(", "majority_class_baseline(", "Need at least {min_classes} target classes", "unseen in training", "trivial baseline"):
     require(marker in main_all, f"classification requirement missing {marker!r}")
@@ -136,7 +168,7 @@ require("uncalibrated" in main_all and "no threshold shipped" in main_all, "main
 require("Reproducibility boundary" in main_all, "main variability statement missing")
 require("BYOD privacy boundary" in main_all, "data locality/privacy statement missing")
 require("Uploaded inputs remain in the notebook runtime" in inf_all, "artifact data locality statement missing")
-require("'required_features': FEATURE_COLUMNS" in inf_own, "artifact does not surface schema before upload")
+require('"required_features": len(features)' in inf_own, "artifact does not surface schema before reading rows")
 
 # Artifact provenance must establish runtime compatibility before checkpoint reconstruction.
 require("validate_artifact_runtime(" in inf_own, "artifact runtime compatibility is not validated")
@@ -147,8 +179,9 @@ require(inf_own.index("verify_artifact_bundle(") < inf_own.index("create_classif
 for marker in ("MAX_ARTIFACT_EXPANDED_BYTES", "Ambiguous backslash ZIP member", "Unexpected or missing artifact files", "Checkpoint size mismatch", "Training-context size mismatch", "def manifest_member_path"):
     require(marker in api_source, f"api hardening marker missing {marker!r}")
 for own, label in ((main_own, "main"), (inf_own, "artifact")):
-    require(".extractall(" not in own and "zipfile.ZipFile(" not in own, f"{label} must extract only through safe_extract_zip")
-for marker in ("'payloadFiles'", "'sizes'", "'runtime'", "safe_extract_zip(", "verify_artifact_bundle("):
+    # zipfile.ZipFile is used read-only (the uv wheel, the pinned Penguins archive); extraction goes through safe_extract_zip.
+    require(".extractall(" not in own and ".extract(" not in own, f"{label} must extract only through safe_extract_zip")
+for marker in ('"payloadFiles"', '"sizes"', '"runtime"', "safe_extract_zip(", "verify_artifact_bundle("):
     require(marker in main_own, f"main hardening marker missing {marker!r}")
 require("EXPECTED_ZIP_SHA256" in inf_own, "artifact hardening marker missing EXPECTED_ZIP_SHA256")
 
@@ -161,7 +194,7 @@ for label, content in (("main", main_all), ("artifact", inf_all)):
 # Registry.
 registry = README.read_text(encoding="utf-8")
 require("| `E2E` |" in registry and "| `ARTIFACT-INFERENCE` |" in registry, "tutorial registry missing profiles")
-require("DIMER Notebook Specification 2.0" in registry, "tutorial registry missing spec version")
+require("DIMER Notebook Specification 2.2" in registry, "tutorial registry missing spec version")
 require("requirements-release.lock" in registry, "tutorial registry does not document transitive lock")
 
 # Executor evidence contract (the previous pair's kernel executor; must not fake execution).
@@ -171,5 +204,5 @@ for marker in ("NotebookClient", "client.execute()", "separate fresh Jupyter ker
 require("exec(compile(" not in executor, "release verifier still executes notebook cells as plain Python")
 require("startswith(\"%\")" not in executor, "release verifier still strips notebook magics")
 
-print("NOTEBOOK_SPEC 2.0 repository-specific static conformance: OK")
+print("NOTEBOOK_SPEC 2.2 repository-specific static conformance: OK")
 print("NOTE: static validation is not clean-runtime execution evidence.")
