@@ -120,3 +120,26 @@ The fresh test plays no part in any of this.
 - **Earlier results:** all earlier recorded numbers of this notebook (2026-10-10 Colab T4, 2026-10-11 CPU drive) are on the Breast
   Cancer sample and its 114-row test, under the previous recipe. They remain an earlier-run reference, labelled as such; that test is an
   exposed development test and no setting here was chosen on it.
+
+## Amendment 1 (2026-10-20), committed alone before the code that implements it
+
+Written after a peer review of the implementation (PR #27, head `5a55bcd`), before any T4 run and with the fresh test still never
+scored. Nothing here changes the data, the grid configs, the selection tolerance or the reading rule; sections 1–7 stay as written.
+
+1. **Epoch estimate (section 3), corrected.** tabicl stops when its patience counter reaches `patience`, one count per
+   non-improving epoch, so with no improving epoch C1 stops after **8** epochs and C2 and C3 after **3** (not 9 and 4). This is what
+   the 2026-10-19 CPU development run did. The time estimate is unchanged in substance.
+2. **Optimizer steps are counted, not computed (section 4, tie rule).** Each config records the steps it *attempted* (calls to the
+   AMP grad scaler's `step`), the steps *taken* (an optimizer step-post hook, which fires only when the scaler did not skip the
+   update because of inf/NaN gradients), and the difference as `amp_skipped_steps`. "Fewer optimizer steps" in the tie rule means
+   the **taken** count. The planned count (`epochs_run × chunks per epoch`) is kept beside them for comparison.
+3. **A restored config is the pretrained model (section 4).** A config whose kept weights equal the pretrained weights
+   (`weights_changed: false`, parameter delta 0) is not eligible to be selected as "fine-tuned", whatever its validation score.
+4. **Mask disclosure (section 6).** The MAGIC archive is one pinned file holding `train.csv`, `val.csv` and `test.csv`. Under
+   `DIMER_MASK_FRESH_TEST=1` the data stage still downloads and caches that archive (its digest is checked), but `test.csv` is never
+   extracted, parsed or scored; only the `fresh_test` stage reads it, and not under the mask.
+5. **Look marker outside `outputs/` (section 6).** Besides the ledger under `outputs/fresh-test/`, the first pre-registered
+   scoring in a runtime writes a marker next to the per-run directories (outside `outputs/` and outside any single run
+   directory). If either the ledger, the first report or that marker exists, a new scoring is a "reproduction". Deleting
+   `outputs/` therefore no longer makes a second look claim to be the first.
+6. **Probability rows with a negative entry are refused**, in addition to the existing row-sum check, before renormalisation.
