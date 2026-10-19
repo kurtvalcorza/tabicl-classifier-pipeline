@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # the provenance parity test reads the stamped commit (R96-m3)
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'

@@ -52,7 +52,7 @@ Both pipeline implementations provide ready-to-run interactive Google Colab note
   *Validate an externally supplied `tabicl-dimer-regressor-v1` serving artifact, reconstruct its in-context state, and predict continuous values for new rows with no gradient fine-tuning.*
 
 > [!NOTE]
-> The default in-context path runs on any Colab runtime (pretrained evaluation completes on CPU in seconds on the sample). A GPU runtime is needed only when `RUN_FINE_TUNING` is switched on; fine-tuning is optional and, on the shipped sample, does not improve on the in-context baseline.
+> The E2E tutorial's default table is the UCI MAGIC Gamma Telescope sample (3,000 support, 1,000 validation and a 1,500-row fresh test; CC BY 4.0). `RUN_FINE_TUNING` is on by default and runs a pre-registered three-config fine-tuning grid on a GPU runtime (a Tesla T4 is the documented runtime; a CPU runtime skips the grid and the run is exploratory). The pretrained model is kept unless a config beats it on validation log loss by more than 0.005 (`docs/magic-finetune-preregistration.md`). In a CPU development check of that split (2026-10-19, uncommitted working tree, validation only; not a recorded run of the notebook), no fine-tuning epoch beat the pretrained model and tabicl restored the pretrained weights. The hosted evaluation of record, once it exists, is listed in `docs/release-verification.md`.
 
 ---
 

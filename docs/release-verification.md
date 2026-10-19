@@ -80,8 +80,9 @@ Before changing the registry status from `Candidate` to `Release-grade`:
 1. resolve the exact PR/commit head under review and confirm static CI is green;
 2. open the exact E2E notebook revision in a new **T4 GPU** runtime with **no repository checkout** and a clean model cache;
 3. run it with one **Run all** and no restart, without editing implementation cells (form parameters at their defaults:
-   `DATA_SOURCE = 'Sample: Breast Cancer'`, `USE_BYOD = False`, `RUN_FINE_TUNING = True`, `FINE_TUNE_EPOCHS = 3`,
-   `EVAL_METRIC = 'accuracy'`, `RUN_NEW_DATA_INFERENCE = False`, `RUN_ACTIVITY = False`), then re-run the export cell
+   `DATA_SOURCE = 'Sample: MAGIC Gamma Telescope'`, `USE_BYOD = False`, `RUN_FINE_TUNING = True`, `GRID_EPOCHS_CAP = 0`,
+   `GRID_LEARNING_RATE = 0.0`, `RANDOM_STATE = 42`, `RUN_NEW_DATA_INFERENCE = False`, `RUN_ACTIVITY = False`; `DIMER_MASK_FRESH_TEST`
+   unset only for the run that is to score the fresh test — see *Fresh-test evaluation* below), then re-run the export cell
    once to confirm a second pass reuses the environment and reproduces the bundle digest;
 4. verify that Section 2 reports the carried-file verification and the isolated environment's versions (CPython 3.12.12,
    `torch` 2.14.0, `tabicl` 2.1.1) with CUDA visible, and that the exported result records `NOTEBOOK_SOURCE` equal to
@@ -90,11 +91,13 @@ Before changing the registry status from `Candidate` to `Release-grade`:
    - pinned `jingang/TabICL` acquisition at the immutable revision: the carried manifest is checked against the package
      identity, `stage_missing_files` reports the one manifest entry (`tabicl-classifier-v2-20260212.ckpt`) on a clean
      runtime, and `verify_snapshot` returns its digest;
-   - the Breast Cancer sample split 60/20/20 with stratification (`train=341, holdout=114, test=114`, two classes); the
+   - (the 2026-10-10 record below used the earlier Breast Cancer default, `train=341, holdout=114, test=114`; from 2026-10-19 the default is the
+     pinned MAGIC split, `train=3000, holdout(validation)=1000`, fresh test 1500 read only by `fresh_test`); the
      ceilings surfaced; `outputs/tabiclv2_classifier_input_manifest.json` with one recorded rejection finding;
    - in-context conditioning and the pretrained holdout/test metrics; the **fine-tuning stage ran** (epochs, the
-     candidate's holdout metrics, the selection basis, `best.ckpt` kept only); LightGBM 0.9649 (4 errors) and the random
-     forest 0.9561 (5 errors) on the holdout; the blend's tied-weight range;
+     candidate's holdout metrics, the selection basis, `best.ckpt` kept only); on the earlier Breast Cancer default (Colab T4,
+     2026-10-10, blob `051c81e9`) LightGBM 0.9649 (4 errors) and the random forest 0.9561 (5 errors) on the holdout; the blend's
+     tied-weight range;
    - `outputs/tabiclv2_classifier_evaluation_report.json` with verdict `sample-sanity`;
    - eight held-out rows scored into `outputs/tabiclv2_classifier_predictions.csv`, and their unlabelled copy
      `outputs/tabiclv2_classifier_new_rows.csv`;
@@ -146,6 +149,26 @@ was not exercised). They are not hosted runs and do not change the status.
 
 On a generic Linux kernel the `report` stage needs the system OpenMP library (`libgomp.so.1`, Debian/Ubuntu `libgomp1`)
 for LightGBM; Colab and Kaggle images have it. The local drives supplied it from the locked `torch` wheel.
+
+## Fresh-test evaluation (MAGIC, pre-registered 2026-10-19)
+
+The settings, grid, selection and reading rule are fixed in [`magic-finetune-preregistration.md`](magic-finetune-preregistration.md)
+(committed alone as `64c968c` before any implementing code). The 1,500-row fresh test is scored only by the `fresh_test` stage, only
+when every pre-registered setting holds and the device is a Tesla T4; any other run writes `fresh-test/*_exploratory_<n>.json` and
+reads nothing.
+
+- **Evaluation of record:** none yet. The first hosted Tesla T4 run of the pre-registered settings will be recorded here (commit,
+  blob, date, `grid_hash`, the primary endpoint with its interval and verdict) and `RECORDED_EVALUATION` in `tools/tutorial_stages.py`
+  set to it; every later identical run is a **reproduction** and is listed under it.
+- **Before that run:** two **masked** hosted T4 runs (`DIMER_MASK_FRESH_TEST=1`) must print identical grid hashes, validation numbers
+  and selections (determinism check). If they differ, no run of record is made.
+- **Fresh-test looks so far:** none. No CPU development look was taken: the fixer's CPU checks ran with the fresh test masked.
+
+### CPU development records (not clean-runtime evidence; fresh test masked)
+
+| Date | Code | What ran | Result |
+|---|---|---|---|
+| 2026-10-19 | uncommitted working tree on `fix/tabicl-tutorial-review-2026-10-17` (after `9fa714a`) | stages data → validate → condition (`cpu_grid=True`, exploratory) → report → fresh_test (masked, then unmasked) → predict → export → reload on CPU, `DIMER_MASK_FRESH_TEST=1` except for the one unmasked `fresh_test` call | pretrained validation log loss 0.2634, accuracy 0.903 (LightGBM 0.3412 / 0.865, random forest 0.3234 / 0.880). C1 (1e-5): 8 epochs, 48 steps, every epoch 0.2712–0.2762 against tabicl's baseline 0.2701, `weights_changed: false`, last-epoch delta 0.415. C2 (5e-5): 3 epochs, 18 steps, 0.2864 / 0.3340 / 0.3027, delta 0.0 kept / 1.171 last. C3 (1e-6): 3 epochs, 18 steps, 0.2702 / 0.2701 / 0.2700, delta 0.0 kept / 0.031 last. Selection: pretrained kept. CPU grid hash `11cb0310…b19d` (a CPU hash; not comparable with T4). The unmasked `fresh_test` call wrote `not scored (exploratory)` with `settings_differing: [cpu_grid, device]` and read nothing. Reload PASS. 0 "y_prob do not sum to one" warnings. |
 
 ## Current status
 

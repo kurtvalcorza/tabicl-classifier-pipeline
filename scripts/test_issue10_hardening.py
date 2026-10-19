@@ -51,7 +51,7 @@ class Issue10HardeningTests(unittest.TestCase):
 
     def test_non_best_finetune_checkpoints_are_pruned(self):
         main = text(MAIN)
-        self.assertIn("c.resolve() != best.resolve()", main)
+        self.assertIn("for checkpoint in epoch_ckpts:", main)
         self.assertIn("checkpoint.unlink()", main)
         self.assertIn("the stage keeps `best.ckpt` only", main)
 

@@ -1,3 +1,4 @@
+# ruff: noqa: E401, E501  -- a one-off data build script, kept compact
 """Build the pinned MAGIC Gamma Telescope split zip (row 96, R96-D1 = C).
 
 Split rule (identical to the 2026-10-19 dataset research, so the fresh test is the one hashed there and never scored):
@@ -6,7 +7,11 @@ rest, then train capped at 3000 (stratified); the 13,520 rows left over are the 
 The CSV rows are copied as the original text (dtype=str), so no float is re-formatted. The test rows are written,
 never fitted, predicted or scored by this script.
 """
-import hashlib, io, json, sys, zipfile
+import hashlib
+import io
+import json
+import sys
+import zipfile
 from pathlib import Path
 
 import numpy as np

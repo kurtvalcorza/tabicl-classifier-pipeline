@@ -102,7 +102,7 @@ def _no_colab(monkeypatch):
 
 def _kernel(tmp_path: Path) -> tuple[dict, list]:
     calls: list = []
-    ns = {"ROOT": tmp_path / "run", "Path": Path, "shutil": shutil, "run_stage": lambda stage, **o: calls.append((stage, o))}
+    ns = {"ROOT": tmp_path / "run", "OUTPUTS": tmp_path / "outputs", "Refused": type("Refused", (RuntimeError,), {}), "Path": Path, "shutil": shutil, "run_stage": lambda stage, **o: calls.append((stage, o))}
     return ns, calls
 
 
@@ -209,22 +209,19 @@ def test_m1_second_run_all_reuses_the_matching_environment(tmp_path, monkeypatch
 
 
 def test_M2_fine_tuning_runs_on_the_default_path_bounded_and_cpu_skip_is_recorded() -> None:
-    """TIC-M2: RUN_FINE_TUNING defaults to True; the run is bounded (3 epochs, 300 s, patience 2), selected on the holdout,
-    and a CPU runtime records why it was skipped instead of raising."""
+    """TIC-M2, superseded by R96-M1/M3 (2026-10-19): RUN_FINE_TUNING defaults to True and runs the pre-registered grid,
+    selected on validation; a CPU runtime records why it was skipped instead of raising."""
     cell = _cell_with(E2E, "RUN_FINE_TUNING = True  # @param")
     assert "run_stage('condition', run_fine_tuning=RUN_FINE_TUNING" in cell
-    assert STAGES.FINE_TUNE == {"epochs": 3, "time_limit": 300, "patience": 2, "eval_metric": "accuracy"}
+    assert not hasattr(STAGES, "FINE_TUNE") and [c["id"] for c in STAGES.GRID] == ["C1", "C2", "C3"]
     source = (TOOLS / "tutorial_stages.py").read_text(encoding="utf-8")
-    body = source[source.index("def stage_condition"):source.index("def stage_report")]
+    body = source[source.index("PREREGISTERED: dict"):source.index("def wilson")]
     assert 'opts.get("run_fine_tuning", True)' in body
     assert 'fine_tune["skipped"] = "no CUDA device' in body and "raise RuntimeError('TabICLv2 fine-tuning requires CUDA')" not in body
-    assert "time_limit=FINE_TUNE[\"time_limit\"]" in body and "patience=FINE_TUNE[\"patience\"]" in body
-    assert 'selection = f"holdout:{metric}"' in body and "MIN_SELECTION_HOLDOUT_ROWS" in body
-    # TIC-M2 acceptance (fixer, 2026-10-11): the hosted record carries the early-stopping value selected on, not only
-    # the epoch budget (tabicl 2.1.1 keeps it as _best_metric_ and exposes no best epoch).
-    assert 'getattr(finetuner, "_best_metric_", None)' in body and "early_stopping_best_holdout_metric=best_metric" in body
+    assert "time_limit=cfg[\"time_limit\"]" in body and "patience=cfg[\"patience\"]" in body
+    assert "MIN_SELECTION_HOLDOUT_ROWS" in body and "select_config(pretrained_holdout, grid)" in body
     run_all = _nb(E2E)["cells"][0]
-    assert "bounded to 3 epochs and 5 minutes" in _src(run_all)
+    assert "pre-registered three-config fine-tuning grid" in _src(run_all)
 
 
 # ---------------------------------------------------------------- TIC-M3 / TICA-M3: guided layer
@@ -339,7 +336,7 @@ def test_m2_presplit_byod_by_path_without_colab(tmp_path, monkeypatch) -> None:
         assert files.calls == 1 and calls == []
     ns, calls = _kernel(tmp_path)
     exec(compile(cell, "<s4>", "exec"), ns)  # default path: no colab import, no upload
-    assert calls == [("data", {"data_source": "Sample: Breast Cancer", "use_byod": False, "target_column": "target", "paths": {}, "text_columns": []})]
+    assert calls == [("data", {"data_source": "Sample: MAGIC Gamma Telescope", "use_byod": False, "target_column": "target", "paths": {}, "text_columns": []})]
 
 
 def test_m2_presplit_byod_runs_through_validate(tmp_path) -> None:

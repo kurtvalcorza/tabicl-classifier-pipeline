@@ -1,4 +1,4 @@
-"""Stage runner for the standalone TabICLv2 classifier E2E tutorial (NOTEBOOK_SPEC 2.2 §25.13 isolated-environment pattern).
+"""Stage runner for the standalone TabICLv2 classifier E2E tutorial (NOTEBOOK_SPEC 2.5 §25.13 isolated-environment pattern).
 
 The tutorial notebook carries this file verbatim (as ``tutorial_stages.py`` in its run directory, beside the carried
 package under ``src/``) and runs every stage with the interpreter of an isolated, hash-locked environment::
@@ -11,7 +11,9 @@ verified checkpoint under ``--weights``, the partitions, encoders and records of
 support rows and is repeated by every stage that needs the model; a fine-tuned candidate is kept as a checkpoint file.
 On failure a stage writes ``RUN_DIR/state/<stage>.error.json``, which the notebook re-raises in the kernel.
 
-Stages: weights → data → validate → condition → report → predict → export → reload, plus the optional ``activity``.
+Stages: weights → data → validate → condition → report → fresh_test → predict → export → reload, plus the optional
+``activity``. The fresh test of the default MAGIC sample is read only by ``fresh_test``, only under the pre-registered
+settings (docs/magic-finetune-preregistration.md), and never when ``DIMER_MASK_FRESH_TEST=1``.
 The ``data`` and ``validate`` stages import no model library, so CI exercises them directly.
 """
 # ruff: noqa: E501  -- the printed dictionaries are the learner-facing output; they are kept on one line each
@@ -23,6 +25,8 @@ import importlib
 import io
 import json
 import math
+import os
+import random
 import shutil
 import sys
 import traceback
@@ -35,13 +39,94 @@ SEED = 42
 VALIDATION_SPLIT = 0.20
 NEW_ROWS = 8
 RELOAD_RTOL, RELOAD_ATOL = 1e-5, 1e-7
-SAMPLE_SOURCES = ("Sample: Breast Cancer", "Sample: Wine", "Sample: Palmer Penguins")
+MAGIC_SOURCE = "Sample: MAGIC Gamma Telescope"
+REFERENCE_SOURCE = "Sample: Breast Cancer"  # the earlier default; its 114-row test is an exposed development test
+SAMPLE_SOURCES = (MAGIC_SOURCE, REFERENCE_SOURCE, "Sample: Wine", "Sample: Palmer Penguins")
+DEFAULT_SOURCE = MAGIC_SOURCE
 UPLOAD_SOURCES = ("Upload CSV", "Upload pre-split train/val/test")
 PENGUINS_URL = "https://raw.githubusercontent.com/kurtvalcorza/tabicl-classifier-pipeline/169e60fa8d956aa389c144ac9c7988b92db84a79/examples/sample-data/palmer-penguins.zip"
 PENGUINS_SHA256 = "fe894295ccc0a447dc020f5d57798968b95eae3da1a4cbe09a638e6b1bd0ba44"
 NUMERIC_LIKE_SHARE = 0.9  # an object column whose values are >= 90 % numbers is treated as a numeric column with typos
-FINE_TUNE = {"epochs": 3, "time_limit": 300, "patience": 2, "eval_metric": "accuracy"}
 MIN_SELECTION_HOLDOUT_ROWS = 50
+
+# --- MAGIC Gamma Telescope (UCI 159, CC BY 4.0): pinned split archive, committed at an immutable revision (R96-D1) ---
+MAGIC_COMMIT = "fc2a5adb68981e01bb00cae3ea5ea2f377412383"
+MAGIC_URL = f"https://raw.githubusercontent.com/kurtvalcorza/tabicl-classifier-pipeline/{MAGIC_COMMIT}/examples/sample-data/magic-gamma.zip"
+MAGIC_SHA256 = "2c6108e6d3e53cd9fcc8417df6cc8018ea2faa70a3e9b8e58fd3ef4e1463497d"
+MAGIC_SOURCE_SHA256 = "a52d3a378e43df7b678c4c0b2f03a66a058bbfeb27c95ccd037a767e7d172984"
+MAGIC_MEMBERS = {
+    "train.csv": "0a5f1692662ad23807339a91ebfeef26cc22871ad5df535bd284aea70d16a246",
+    "val.csv": "36bc23405d7a5bee814c21297140ffd70436c147c236cbaf2881613a1ebdb0b4",
+    "test.csv": "62c3eff6bb323ac150ec60eb4f26d5ed92ce20fe79ed3baa83f32b76e4482b51",
+}
+MAGIC_ROW_IDS_SHA256 = {
+    "train": "009082b81a485027433be0fcb0de99855a480b425ebbb9e70bd37242307210cd",
+    "val": "22dbeb1022a76e2cab51dd7a2df9869efa71430867d975f21ac59369e84d17b3",
+    "test": "8847cab4e87c8ff30dd6a27045464f7891b2e14dd39149c5e5648348f190f3e4",
+    "reserve": "c1b30483d5024fa6f94893a824dcbacf60ca942b941faa790edbb541c97208b3",
+}
+MAGIC_FRESH_TEST_ROWS = 1500
+
+# --- pre-registered fine-tuning grid, selection and reading rule (docs/magic-finetune-preregistration.md) ---
+GRID_COMMON = {"weight_decay": 0.01, "grad_clip": 1.0, "max_data_size": 500, "use_lr_scheduler": False, "finetune_ctx_query_ratio": 0.2, "early_stopping": True, "eval_metric": "log_loss", "min_delta": 1e-4, "n_estimators_inference": 8}
+GRID = (
+    {"id": "C1", "role": "production-like", "learning_rate": 1e-5, "epochs": 30, "patience": 8, "n_estimators_finetune": 2, "n_estimators_validation": 2, "time_limit": 1800},
+    {"id": "C2", "role": "larger steps", "learning_rate": 5e-5, "epochs": 10, "patience": 3, "n_estimators_finetune": 2, "n_estimators_validation": 2, "time_limit": 600},
+    {"id": "C3", "role": "smaller steps", "learning_rate": 1e-6, "epochs": 10, "patience": 3, "n_estimators_finetune": 2, "n_estimators_validation": 2, "time_limit": 600},
+)
+SELECTION_TOLERANCE = 0.005  # validation log loss a config must beat the pretrained model by; otherwise keep pretrained
+SELECTION_TIE = 1e-4
+INFERENCE_ESTIMATORS = 8
+BOOTSTRAP = {"seed": 20261019, "n_boot": 10000}
+PRACTICAL_DELTA = 0.005  # "improved" needs the CI upper bound < 0 and delta <= -PRACTICAL_DELTA
+DETERMINISM = {"CUBLAS_WORKSPACE_CONFIG": ":4096:8", "cudnn_deterministic": True, "cudnn_benchmark": False, "deterministic_algorithms": True, "warn_only": False, "seed": SEED}
+REQUIRED_DEVICE = "Tesla T4"
+MASK_ENV = "DIMER_MASK_FRESH_TEST"
+# The first hosted T4 run under the pre-registered settings, once recorded in docs/release-verification.md (commit, blob, date).
+# While None, the first pre-registered scoring in a runtime is "pre-registered evaluation (this runtime)"; afterwards every
+# identical scoring in any runtime is a "reproduction".
+RECORDED_EVALUATION: dict[str, str] | None = None
+TEST_LOOKS = ("pre-registered evaluation (this runtime)", "reproduction", "not scored (exploratory)")
+FRESH_DIR = "fresh-test"  # under outputs/; not removed by clear_outputs, so a re-run in the same runtime is a reproduction
+
+
+def fresh_test_masked() -> bool:
+    """Re-read on every call (a mask copied once at install fails open)."""
+    return os.environ.get(MASK_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
+def atomic_write_bytes(path: Path, data: bytes) -> Path:
+    """Write ``path`` via a temporary file and ``os.replace`` so an interrupted write never leaves a truncated file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
+    return path
+
+
+def atomic_write_json(path: Path, value: Any) -> Path:
+    return atomic_write_bytes(path, json.dumps(value, indent=2, ensure_ascii=False, default=str).encode("utf-8"))
+
+
+def apply_determinism() -> dict[str, Any]:
+    """Pre-registered determinism flags. ``CUBLAS_WORKSPACE_CONFIG`` is set by ``main`` before torch is imported. An op
+    with no deterministic CUDA kernel raises (no ``warn_only``) and stops the stage, naming the op."""
+    import numpy as np
+    import torch
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    return {"CUBLAS_WORKSPACE_CONFIG": os.environ.get("CUBLAS_WORKSPACE_CONFIG"), "cudnn_deterministic": bool(torch.backends.cudnn.deterministic), "cudnn_benchmark": bool(torch.backends.cudnn.benchmark), "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()), "warn_only": bool(torch.is_deterministic_algorithms_warn_only_enabled()), "seed": SEED}
+
+
+def device_name() -> str:
+    import torch
+
+    return torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"
 SAMPLE_BUNDLE_RECORD = "sample-bundle/SAMPLE_BUNDLE.json"  # carried: the pinned sample bundle's provenance
 
 
@@ -58,18 +143,21 @@ class Run:
         self.state.mkdir(parents=True, exist_ok=True)
 
     def write_state(self, name: str, value: Any) -> Path:
-        path = self.state / name
-        path.write_text(json.dumps(value, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-        return path
+        return atomic_write_json(self.state / name, value)
 
     def read_state(self, name: str, needed_by: str) -> Any:
         path = self.state / name
         if not path.is_file():
             raise RuntimeError(f"{name} is missing: run the stage that writes it before '{needed_by}' (run the notebook from Section 4)")
-        return json.loads(path.read_text(encoding="utf-8"))
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"{name} is incomplete or corrupt (an interrupted stage?): re-run the stage that writes it before '{needed_by}' (run the notebook from Section 4)") from exc
 
     def write_frame(self, name: str, frame) -> None:
-        frame.to_parquet(self.state / name, index=True, engine="pyarrow")
+        buffer = io.BytesIO()
+        frame.to_parquet(buffer, index=True, engine="pyarrow")
+        atomic_write_bytes(self.state / name, buffer.getvalue())
 
     def read_frame(self, name: str, needed_by: str):
         import pandas as pd
@@ -80,10 +168,7 @@ class Run:
         return pd.read_parquet(path, engine="pyarrow")
 
     def write_output(self, name: str, value: Any) -> Path:
-        path = self.out / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(value, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-        return path
+        return atomic_write_json(self.out / name, value)
 
 
 def package(root: Path):
@@ -151,7 +236,36 @@ def load_sample(P, source: str):
                 raise ValueError("Palmer Penguins sample archive is missing train.csv, val.csv, or test.csv")
             parts = [P.read_csv_payload(archive.read(names[n]), n) for n in ("train.csv", "val.csv", "test.csv")]
         return (*parts, "palmer-penguins-cc0", "species")
+    if source == MAGIC_SOURCE:
+        raise ValueError("the MAGIC sample is loaded by the data stage (it needs the run's cache); choose another activity table")
     raise ValueError(f"DATA_SOURCE must be one of {list(SAMPLE_SOURCES + UPLOAD_SOURCES)}, got {source!r}")
+
+
+def fetch_magic(cache: Path) -> bytes:
+    """The pinned MAGIC archive: reused from ``cache`` when its digest matches, else fetched at the immutable commit."""
+    if cache.is_file() and hashlib.sha256(cache.read_bytes()).hexdigest() == MAGIC_SHA256:
+        return cache.read_bytes()
+    import urllib.request
+
+    with urllib.request.urlopen(MAGIC_URL, timeout=60) as response:
+        payload = response.read()
+    digest = hashlib.sha256(payload).hexdigest()
+    if digest != MAGIC_SHA256:
+        raise ValueError(f"MAGIC sample archive digest mismatch: {digest} != {MAGIC_SHA256}")
+    atomic_write_bytes(cache, payload)
+    return payload
+
+
+def magic_member(payload: bytes, name: str) -> bytes:
+    """One CSV of the pinned archive, digest-checked. ``test.csv`` is read only by the fresh_test stage."""
+    import zipfile
+
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        data = archive.read(name)
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != MAGIC_MEMBERS[name]:
+        raise ValueError(f"MAGIC sample member {name} digest mismatch: {digest} != {MAGIC_MEMBERS[name]}")
+    return data
 
 
 def check_byod_table(frame, name: str, target: str, text_columns: list[str]) -> None:
@@ -216,8 +330,10 @@ def stage_data(run: Run) -> None:
 
     P = package(run.root)
     opts = run.options
-    source = opts.get("data_source", "Sample: Breast Cancer")
+    source = opts.get("data_source", DEFAULT_SOURCE)
     use_byod = bool(opts.get("use_byod", False))
+    masked = fresh_test_masked()
+    print({"fresh_test_mask": f"{MASK_ENV}=1: the fresh test is not read in this run" if masked else f"{MASK_ENV} unset: the fresh test is read only by the fresh_test stage, only under the pre-registered settings"})
     if use_byod and source in SAMPLE_SOURCES:
         raise ValueError('USE_BYOD=True requires DATA_SOURCE = "Upload CSV" or "Upload pre-split train/val/test".')
     if source in UPLOAD_SOURCES and not use_byod:
@@ -229,9 +345,17 @@ def stage_data(run: Run) -> None:
         print({"removed_previous_outputs": removed})
     text_columns = list(opts.get("text_columns") or [])
     dropped: dict[str, int] = {}
-    if source in SAMPLE_SOURCES:
+    extra: dict[str, Any] = {}
+    if source == MAGIC_SOURCE:
+        payload = fetch_magic(run.root / "inputs" / "magic-gamma.zip")
+        train = P.read_csv_payload(magic_member(payload, "train.csv"), "train.csv")
+        holdout = P.read_csv_payload(magic_member(payload, "val.csv"), "val.csv")
+        test, name, target, kind = None, "uci-159-magic-gamma-telescope", "target", "sample"
+        extra = {"archive_sha256": MAGIC_SHA256, "source_sha256": MAGIC_SOURCE_SHA256, "row_ids_sha256": MAGIC_ROW_IDS_SHA256, "holdout_role": "validation (1,000 rows): grid selection and early stopping", "test_role": "fresh test (1,500 rows): not loaded here; read only by the fresh_test stage under the pre-registered settings", "fresh_test_rows": MAGIC_FRESH_TEST_ROWS, "fresh_test_member_sha256": MAGIC_MEMBERS["test.csv"], "reserve_rows": 13520}
+    elif source in SAMPLE_SOURCES:
         train, holdout, test, name, target = load_sample(P, source)
         kind = "sample"
+        extra = {"test_role": "exposed development test (scored in the 2026-10-10 and 2026-10-11 runs; an earlier-run reference)" if source == REFERENCE_SOURCE else "independent test (exploratory sample)"}
     else:
         target = opts.get("target_column") or "target"
         paths = opts.get("paths") or {}
@@ -260,12 +384,13 @@ def stage_data(run: Run) -> None:
             test = read("test")[0] if paths.get("test") else None
             name = "pre-split upload (" + train_name + ")"
         kind = "BYOD"
+        extra = {"test_role": "your test partition (exploratory: BYOD never scores the fresh test)"}
     parts = {"train": train, "holdout": holdout, "test": test}
     for key, frame in parts.items():
         if frame is not None:
             run.write_frame(f"{key}.parquet", frame)
     digest = hashlib.sha256(pd.concat([f for f in parts.values() if f is not None]).to_csv(index=False).encode("utf-8")).hexdigest()
-    record = {"sample_kind": kind, "name": name, "source": source, "target": target, "train_rows": len(train), "holdout_rows": len(holdout), "test_rows": 0 if test is None else len(test), "csv_sha256": digest, "dropped_missing_target_rows_before_split": dropped, "text_columns": text_columns}
+    record = {"sample_kind": kind, "name": name, "source": source, "target": target, "train_rows": len(train), "holdout_rows": len(holdout), "test_rows": 0 if test is None else len(test), "csv_sha256": digest, "dropped_missing_target_rows_before_split": dropped, "text_columns": text_columns, "use_byod": use_byod, **extra}
     run.write_state("data.json", record)
     print(record)
     if dropped.get("csv"):
@@ -336,9 +461,9 @@ def encoded(run: Run, needed_by: str):
     return enc, train, holdout, test
 
 
-def pretrained(run: Run, n_estimators: int = 8):
+def pretrained(run: Run, n_estimators: int = INFERENCE_ESTIMATORS, random_state: int = SEED):
     P = package(run.root)
-    return P.TabICLClassificationPipeline.from_pretrained(weights_dir=run.weights / P.MODEL_KEY, n_estimators=n_estimators, random_state=SEED)
+    return P.TabICLClassificationPipeline.from_pretrained(weights_dir=run.weights / P.MODEL_KEY, n_estimators=n_estimators, random_state=random_state)
 
 
 def from_checkpoint(run: Run, checkpoint: Path, like, source: str):
@@ -361,70 +486,381 @@ def score(P, model, frame, enc):
     return P.classification_metrics(frame[enc["target"]].to_numpy(), model.predict(X), model.predict_proba(X), model.classes_)
 
 
+PREREGISTERED: dict[str, Any] = {
+    "data_source": MAGIC_SOURCE,
+    "use_byod": False,
+    "archive_sha256": MAGIC_SHA256,
+    "row_ids_sha256": MAGIC_ROW_IDS_SHA256,
+    "run_fine_tuning": True,
+    "grid_epochs_cap": 0,
+    "grid_learning_rate": 0.0,
+    "random_state": SEED,
+    "cpu_grid": False,
+    "grid": [dict(c) for c in GRID],
+    "grid_common": dict(GRID_COMMON),
+    "selection_tolerance": SELECTION_TOLERANCE,
+    "inference_estimators": INFERENCE_ESTIMATORS,
+    "bootstrap": dict(BOOTSTRAP),
+    "determinism": dict(DETERMINISM),
+}
+
+
+def current_settings(opts: dict[str, Any], data: dict[str, Any], determinism: dict[str, Any] | None, device: str) -> dict[str, Any]:
+    """Every setting the pre-registration fixes, as this run used it (SCORE_ONCE_RULE item 1)."""
+    return {
+        "data_source": data.get("source"),
+        "use_byod": bool(data.get("use_byod", False)),
+        "archive_sha256": data.get("archive_sha256"),
+        "row_ids_sha256": data.get("row_ids_sha256"),
+        "run_fine_tuning": bool(opts.get("run_fine_tuning", True)),
+        "grid_epochs_cap": int(opts.get("grid_epochs_cap", 0) or 0),
+        "grid_learning_rate": float(opts.get("grid_learning_rate", 0.0) or 0.0),
+        "random_state": int(opts.get("random_state", SEED)),
+        "cpu_grid": bool(opts.get("cpu_grid", False)),
+        "grid": [dict(c) for c in GRID],
+        "grid_common": dict(GRID_COMMON),
+        "selection_tolerance": SELECTION_TOLERANCE,
+        "inference_estimators": INFERENCE_ESTIMATORS,
+        "bootstrap": dict(BOOTSTRAP),
+        "determinism": determinism,
+        "device": device,
+    }
+
+
+def settings_differing(settings: dict[str, Any]) -> list[str]:
+    """Names of the settings that differ from the pre-registration; empty means ``preregistered``. Computed from ALL
+    fixed settings, including the device (a Tesla T4 is pre-registered)."""
+    differing = [key for key, value in PREREGISTERED.items() if settings.get(key) != value]
+    if REQUIRED_DEVICE not in str(settings.get("device", "")):
+        differing.append("device")
+    return differing
+
+
+def grid_hash(grid: list[dict[str, Any]], selection: str) -> str:
+    """Fingerprint of the grid's outcome, so two runs (e.g. two masked hosted runs) can be compared digit for digit."""
+    def r(value):
+        return None if value is None else round(float(value), 6)
+
+    rows = [{"id": g.get("id"), "epochs_run": g.get("epochs_run"), "curve": [r(v) for v in g.get("val_log_loss_per_epoch") or []], "baseline": r(g.get("baseline_val_log_loss")), "candidate_val_log_loss": r((g.get("candidate_val") or {}).get("log_loss")), "delta_best": r(g.get("param_delta_l2_best")), "delta_last": r(g.get("param_delta_l2_last_epoch"))} for g in grid]
+    return hashlib.sha256(json.dumps({"grid": rows, "selection": selection}, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def model_state(pipeline) -> dict[str, Any]:
+    """The loaded network's weights of a conditioned pipeline (tabicl deserialises the verified checkpoint on ``fit``)."""
+    return {k: v.detach().cpu() for k, v in pipeline.estimator.model_.state_dict().items()}
+
+
+def param_delta_l2(a: dict[str, Any], b: dict[str, Any]) -> float:
+    """L2 norm of the difference over the floating-point tensors both state dicts hold: 0.0 means the weights are identical."""
+    total = 0.0
+    for key, value in a.items():
+        other = b.get(key)
+        if other is None or not hasattr(value, "is_floating_point") or not value.is_floating_point():
+            continue
+        total += float(((other.float() - value.float()) ** 2).sum())
+    return math.sqrt(total)
+
+
+def run_config(run: Run, P, cfg: dict[str, Any], pipe, enc: dict, train, holdout, *, device: str, seed: int, epochs_cap: int, lr_override: float, base_state: dict) -> dict[str, Any]:
+    """One grid config: fine-tune with early stopping on validation log loss, then re-score its best.ckpt at the inference
+    ensemble size. Records the validation curve, optimizer steps and whether the weights tabicl kept changed."""
+    import time
+
+    from tabicl._finetune.data import count_chunks
+
+    ft_dir = run.state / "finetune" / cfg["id"]
+    shutil.rmtree(ft_dir, ignore_errors=True)
+    ft_dir.mkdir(parents=True)
+    epochs = min(cfg["epochs"], epochs_cap) if epochs_cap else cfg["epochs"]
+    lr = lr_override or cfg["learning_rate"]
+    c = GRID_COMMON
+    finetuner = P.create_finetuned_classifier(epochs=epochs, learning_rate=lr, weight_decay=c["weight_decay"], grad_clip=c["grad_clip"], amp=device == "cuda", use_lr_scheduler=c["use_lr_scheduler"], n_estimators_finetune=cfg["n_estimators_finetune"], n_estimators_validation=cfg["n_estimators_validation"], n_estimators_inference=c["n_estimators_inference"], max_data_size=c["max_data_size"], finetune_ctx_query_ratio=c["finetune_ctx_query_ratio"], early_stopping=c["early_stopping"], patience=cfg["patience"], min_delta=c["min_delta"], time_limit=cfg["time_limit"], eval_metric=c["eval_metric"], model_path=str(pipe.model_path), allow_auto_download=False, device=device, random_state=seed, verbose=True, support_many_classes=True)
+    curve: list[float] = []
+    validate = finetuner._validate_current_model
+
+    def recorded(*args, **kwargs):  # baseline, then one validation per epoch (log loss is negated by tabicl)
+        result = validate(*args, **kwargs)
+        curve.append(-float(result.primary))
+        return result
+
+    finetuner._validate_current_model = recorded
+    t0 = time.perf_counter()
+    P.fine_tune_classifier(finetuner, train[enc["features"]], train[enc["target"]], X_val=holdout[enc["features"]], y_val=holdout[enc["target"]], output_dir=str(ft_dir))
+    seconds = time.perf_counter() - t0
+    best = ft_dir / "best.ckpt"
+    if not best.exists():
+        raise RuntimeError(f"Fine-tuning config {cfg['id']} did not produce best.ckpt")
+    steps_per_epoch = count_chunks(len(train), c["max_data_size"])
+    epochs_run = max(0, len(curve) - 1)
+    epoch_ckpts = sorted(ft_dir.glob("epoch*.ckpt"), key=lambda path: int("".join(ch for ch in path.stem if ch.isdigit()) or 0))
+    last = epoch_ckpts[-1] if epoch_ckpts else None
+    candidate = from_checkpoint(run, best, pipe, "fine-tuned")
+    candidate.fit(train[enc["features"]], train[enc["target"]])
+    candidate_val = score(P, candidate, holdout, enc)
+    delta_best = param_delta_l2(base_state, model_state(candidate))
+    last_val = delta_last = None
+    if last is not None:
+        final = from_checkpoint(run, last, pipe, "fine-tuned (last epoch, exploratory)")
+        final.fit(train[enc["features"]], train[enc["target"]])
+        last_val = score(P, final, holdout, enc)
+        delta_last = param_delta_l2(base_state, model_state(final))
+    for checkpoint in epoch_ckpts:
+        checkpoint.unlink()  # keep best.ckpt only: TabICL writes one 331 MB checkpoint per epoch
+    record = {"id": cfg["id"], "role": cfg["role"], "learning_rate": lr, "lr_schedule": "constant (no warmup, so no zero-LR step)", "epochs_requested": epochs, "epochs_run": epochs_run, "patience": cfg["patience"], "steps_per_epoch": steps_per_epoch, "optimizer_steps": epochs_run * steps_per_epoch, "nonzero_lr_steps": epochs_run * steps_per_epoch, "baseline_val_log_loss": curve[0] if curve else None, "val_log_loss_per_epoch": curve[1:], "weights_changed": delta_best > 0.0, "param_delta_l2_best": delta_best, "param_delta_l2_last_epoch": delta_last, "candidate_val": candidate_val, "last_epoch_val_exploratory": last_val, "best_ckpt": str(best), "best_ckpt_sha256": sha256_file(best), "seconds": round(seconds, 1), "complete": True}
+    print({"config": cfg["id"], "role": cfg["role"], "lr": lr, "epochs_run": epochs_run, "optimizer_steps": record["optimizer_steps"], "baseline_val_log_loss": rounded(record["baseline_val_log_loss"]), "val_log_loss_per_epoch": rounded(curve[1:]), "weights_changed": record["weights_changed"], "param_delta_l2_best": rounded(delta_best, 6), "param_delta_l2_last_epoch": rounded(delta_last, 6), "candidate_val_log_loss": rounded(candidate_val["log_loss"]), "seconds": record["seconds"]})
+    if not record["weights_changed"]:
+        print(f"  {cfg['id']}: no epoch beat tabicl's baseline by min_delta {c['min_delta']}, so tabicl restored the pretrained weights and wrote them as best.ckpt (parameter delta 0). The last epoch's weights did move (delta {rounded(delta_last, 6)}); they are only read out on validation below.")
+    return record
+
+
+def select_config(pretrained_val: dict[str, float], grid: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+    """Pre-registered selection on validation log loss: keep the pretrained model unless a config beats it by more than
+    SELECTION_TOLERANCE; ties within SELECTION_TIE go to the config with fewer optimizer steps."""
+    reference = pretrained_val["log_loss"]
+    eligible = [g for g in grid if g.get("complete") and g["candidate_val"]["log_loss"] < reference - SELECTION_TOLERANCE]
+    if not eligible:
+        return None, f"validation:log_loss; pretrained kept (no config beat {reference:.4f} by more than {SELECTION_TOLERANCE})"
+    lowest = min(g["candidate_val"]["log_loss"] for g in eligible)
+    tied = [g for g in eligible if g["candidate_val"]["log_loss"] <= lowest + SELECTION_TIE]
+    chosen = min(tied, key=lambda g: (g["optimizer_steps"], g["candidate_val"]["log_loss"]))
+    return chosen, f"validation:log_loss; {chosen['id']} beat the pretrained model by {reference - chosen['candidate_val']['log_loss']:.4f} > {SELECTION_TOLERANCE}"
+
+
 def stage_condition(run: Run) -> None:
     import torch
 
     P = package(run.root)
+    data = run.read_state("data.json", "condition")
     enc, train, holdout, test = encoded(run, "condition")
     opts = run.options
+    for retired in ("fine_tune_epochs", "eval_metric"):
+        if retired in opts:
+            raise ValueError(f"{retired} was replaced by the pre-registered grid (docs/magic-finetune-preregistration.md); use GRID_EPOCHS_CAP / GRID_LEARNING_RATE for an exploratory run")
     run_ft = bool(opts.get("run_fine_tuning", True))
-    epochs = int(opts.get("fine_tune_epochs", FINE_TUNE["epochs"]))
-    metric = opts.get("eval_metric", FINE_TUNE["eval_metric"])
-    if metric not in {"accuracy", "log_loss", "roc_auc"}:
-        raise ValueError(f"EVAL_METRIC must be accuracy, log_loss or roc_auc, got {metric!r}")
-    if not 1 <= epochs <= 20:
-        raise ValueError(f"FINE_TUNE_EPOCHS must be from 1 to 20, got {epochs}")
+    seed = int(opts.get("random_state", SEED))
+    epochs_cap = int(opts.get("grid_epochs_cap", 0) or 0)
+    lr_override = float(opts.get("grid_learning_rate", 0.0) or 0.0)
+    if epochs_cap < 0 or not 0.0 <= lr_override <= 1e-3:
+        raise ValueError("GRID_EPOCHS_CAP must be >= 0 and GRID_LEARNING_RATE from 0 (pre-registered) to 1e-3")
+    determinism = apply_determinism()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    name = device_name()
+    settings = current_settings(opts, data, determinism, name)
+    differing = settings_differing(settings)
+    print({"device": name, "determinism": determinism, "preregistered": not differing, "settings_differing": differing})
     X_train, y_train = train[enc["features"]], train[enc["target"]]
-    pipe = pretrained(run)
+    pipe = pretrained(run, random_state=seed)
     pipe.fit(X_train, y_train)
     pretrained_holdout = score(P, pipe, holdout, enc)
+    test_role = data.get("test_role", "independent test")
     pretrained_test = score(P, pipe, test, enc) if test is not None else None
-    print("pretrained holdout", rounded(pretrained_holdout))
+    print("pretrained validation", rounded(pretrained_holdout))
     if pretrained_test:
-        print("pretrained independent test", rounded(pretrained_test))
-    candidate_holdout = candidate_test = None
-    active_mode, active_checkpoint, selection = "pretrained", str(pipe.model_path), "default:pretrained"
-    fine_tune = {"requested": run_ft, "ran": False}
-    if run_ft and not torch.cuda.is_available():
-        fine_tune["skipped"] = "no CUDA device: TabICLv2 fine-tuning needs a GPU runtime (RUN7 deviation for this run, recorded here)"
-        print("Fine-tuning skipped:", fine_tune["skipped"], "- choose Runtime > Change runtime type > T4 GPU to run the adaptation.")
-    elif run_ft and not math.isfinite(pretrained_holdout[metric]):
-        fine_tune["skipped"] = f"{metric} is undefined on this holdout, so the candidate could not be selected on it; choose another EVAL_METRIC"
+        print(f"pretrained {test_role}", rounded(pretrained_test))
+    grid: list[dict[str, Any]] = []
+    fine_tune: dict[str, Any] = {"requested": run_ft, "ran": False}
+    cpu_grid = bool(opts.get("cpu_grid", False))
+    if run_ft and device != "cuda" and not cpu_grid:
+        fine_tune["skipped"] = "no CUDA device: the pre-registered grid runs on a GPU runtime (a CPU run would take tens of minutes); recorded here, and the run is exploratory"
+        print("Fine-tuning skipped:", fine_tune["skipped"], "- choose Runtime > Change runtime type > T4 GPU to run the grid.")
+    elif run_ft and len(holdout) < MIN_SELECTION_HOLDOUT_ROWS:
+        fine_tune["skipped"] = f"validation partition too small for selection: {len(holdout)} < {MIN_SELECTION_HOLDOUT_ROWS} rows"
         print("Fine-tuning skipped:", fine_tune["skipped"])
     elif run_ft:
-        ft_dir = run.state / "finetune"
-        shutil.rmtree(ft_dir, ignore_errors=True)
-        finetuner = P.create_finetuned_classifier(epochs=epochs, learning_rate=1e-5, weight_decay=0.01, n_estimators_finetune=1, n_estimators_validation=1, n_estimators_inference=4, early_stopping=True, patience=FINE_TUNE["patience"], time_limit=FINE_TUNE["time_limit"], eval_metric=metric, model_path=str(pipe.model_path), allow_auto_download=False, device="cuda", random_state=SEED, verbose=True, support_many_classes=True)
-        P.fine_tune_classifier(finetuner, X_train, y_train, X_val=holdout[enc["features"]], y_val=holdout[enc["target"]], output_dir=str(ft_dir))
-        best = ft_dir / "best.ckpt"
-        if not best.exists():
-            raise RuntimeError("Fine-tuning did not produce best.ckpt")
-        for checkpoint in [c for c in ft_dir.rglob("*.ckpt") if c.resolve() != best.resolve()]:
-            checkpoint.unlink()  # keep best.ckpt only: TabICL writes one checkpoint per epoch
-        candidate = from_checkpoint(run, best, pipe, "fine-tuned")
-        candidate.fit(X_train, y_train)
-        candidate_holdout = score(P, candidate, holdout, enc)
-        candidate_test = score(P, candidate, test, enc) if test is not None else None
-        # tabicl 2.1.1 keeps the best holdout value its early stopping selected on (measured with n_estimators_validation=1,
-        # so not comparable with the 8-member scores below; the baseline when no epoch improved). It does not expose the
-        # best epoch: the per-epoch values are in this stage's log (the "Fine-tune" progress line).
-        best_metric = getattr(finetuner, "_best_metric_", None)
-        best_metric = float(best_metric) if best_metric is not None and math.isfinite(float(best_metric)) else None
-        fine_tune.update(ran=True, epochs_requested=epochs, time_limit_seconds=FINE_TUNE["time_limit"], checkpoint_bytes=best.stat().st_size, early_stopping_best_holdout_metric=best_metric)
-        print("candidate holdout", rounded(candidate_holdout))
-        if len(holdout) < MIN_SELECTION_HOLDOUT_ROWS:
-            selection = f"default:pretrained; holdout-too-small:{len(holdout)}<{MIN_SELECTION_HOLDOUT_ROWS}"
-        else:
-            selection = f"holdout:{metric}"
-            if P.compare_metric(candidate_holdout, pretrained_holdout, metric):
-                active_mode, active_checkpoint = "fine-tuned", str(best)
-        if candidate_test and pretrained_test:
-            worse = [m for m in P.METRIC_IDS if math.isfinite(candidate_test[m]) and math.isfinite(pretrained_test[m]) and candidate_test[m] != pretrained_test[m] and not P.compare_metric(candidate_test, pretrained_test, m)]
-            if worse:
-                print("WARNING independent-test metrics worsened for the candidate:", worse, "(evidence only; never used for selection)")
-    record = {"active_mode": active_mode, "active_checkpoint": active_checkpoint, "selection": selection, "eval_metric": metric, "fine_tune": fine_tune, "pretrained_holdout": pretrained_holdout, "pretrained_test": pretrained_test, "candidate_holdout": candidate_holdout, "candidate_test": candidate_test, "classes": [str(c) for c in pipe.classes_], "device": pipe.device}
+        base_state = model_state(pipe)
+        for cfg in GRID:
+            grid.append(run_config(run, P, cfg, pipe, enc, train, holdout, device=device, seed=seed, epochs_cap=epochs_cap, lr_override=lr_override, base_state=base_state))
+        for g in grid:  # the package's strict comparison, recorded beside the pre-registered tolerance rule
+            g["strictly_better_than_pretrained"] = bool(P.compare_metric(g["candidate_val"], pretrained_holdout, "log_loss"))
+        fine_tune.update(ran=True, configs=[g["id"] for g in grid])
+    chosen, selection = select_config(pretrained_holdout, grid) if grid else (None, "default:pretrained (no grid run)")
+    active_mode, active_checkpoint = ("fine-tuned", chosen["best_ckpt"]) if chosen else ("pretrained", str(pipe.model_path))
+    for g in grid:  # keep the selected checkpoint only; every config's digest stays in the record
+        if not chosen or g["id"] != chosen["id"]:
+            Path(g["best_ckpt"]).unlink(missing_ok=True)
+    readout = None
+    finals = [g for g in grid if g.get("last_epoch_val_exploratory")]
+    if finals:
+        best_final = min(finals, key=lambda g: g["last_epoch_val_exploratory"]["log_loss"])
+        readout = {"label": "exploratory readout, validation only (never the fresh test)", "config": best_final["id"], "last_epoch_val": best_final["last_epoch_val_exploratory"], "param_delta_l2_last_epoch": best_final["param_delta_l2_last_epoch"], "pretrained_val": pretrained_holdout, "val_log_loss_difference_last_minus_pretrained": best_final["last_epoch_val_exploratory"]["log_loss"] - pretrained_holdout["log_loss"]}
+    candidate_holdout = chosen["candidate_val"] if chosen else (min((g["candidate_val"] for g in grid), key=lambda m: m["log_loss"]) if grid else None)
+    candidate_test = None
+    if chosen and test is not None:
+        model = from_checkpoint(run, Path(active_checkpoint), pipe, "fine-tuned")
+        model.fit(X_train, y_train)
+        candidate_test = score(P, model, test, enc)
+    ghash = grid_hash(grid, selection)
+    record = {"active_mode": active_mode, "active_checkpoint": active_checkpoint, "active_checkpoint_sha256": sha256_file(Path(active_checkpoint)), "selection": selection, "selection_tolerance": SELECTION_TOLERANCE, "eval_metric": "log_loss", "fine_tune": fine_tune, "grid": grid, "grid_hash": ghash, "exploratory_readout": readout, "pretrained_holdout": pretrained_holdout, "pretrained_test": pretrained_test, "candidate_holdout": candidate_holdout, "candidate_test": candidate_test, "test_role": test_role, "classes": [str(c) for c in pipe.classes_], "device": pipe.device, "device_name": name, "settings": settings, "settings_differing": differing, "preregistered": not differing}
     run.write_state("condition.json", record)
-    print({"recommended_for_export": active_mode, "selection_basis": selection, "fine_tune": fine_tune, "device": pipe.device, "classes_": record["classes"]})
+    print({"recommended_for_export": active_mode, "selection_basis": selection, "grid_hash": ghash, "device": name, "classes_": record["classes"]})
+    if readout:
+        print({"exploratory_readout": rounded(readout)})
+    print("grid hash (compare two masked runs digit for digit):", ghash)
+
+
+# --------------------------------------------------------------------------------------------------
+# fresh test (score-once, fail-closed; SCORE_ONCE_RULE.md items 1-8)
+# --------------------------------------------------------------------------------------------------
+
+
+def wilson(successes: int, n: int, z: float = 1.959964) -> list[float]:
+    if n == 0:
+        return [float("nan"), float("nan")]
+    p = successes / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return [centre - half, centre + half]
+
+
+def fresh_test_reading(y, p_pretrained, p_selected, classes, *, same_model: bool, exclude=None) -> dict[str, Any]:
+    """The pre-registered reading rule on row-level arrays: paired bootstrap over rows of the log-loss difference
+    (selected - pretrained), the verdict, and the secondary accuracy readouts."""
+    import numpy as np
+    from sklearn.metrics import roc_auc_score
+
+    y = np.asarray(y).astype(str)
+    labels = [str(c) for c in classes]
+    index = np.array([labels.index(v) for v in y])
+    pa = np.asarray(p_pretrained, dtype=float)
+    pb = np.asarray(p_selected, dtype=float)
+    keep = np.ones(len(y), dtype=bool) if exclude is None else ~np.asarray(exclude, dtype=bool)
+    y, index, pa, pb = y[keep], index[keep], pa[keep], pb[keep]
+    n = len(y)
+    rows = np.arange(n)
+    ll_a = -np.log(np.clip(pa[rows, index], 1e-15, 1.0))
+    ll_b = -np.log(np.clip(pb[rows, index], 1e-15, 1.0))
+    ok_a = (pa.argmax(axis=1) == index).astype(float)
+    ok_b = (pb.argmax(axis=1) == index).astype(float)
+    d_ll, d_acc = ll_b - ll_a, ok_b - ok_a
+    rng = np.random.default_rng(BOOTSTRAP["seed"])
+    boot_ll, boot_acc = [], []
+    for start in range(0, BOOTSTRAP["n_boot"], 1000):
+        draws = rng.integers(0, n, size=(min(1000, BOOTSTRAP["n_boot"] - start), n))
+        boot_ll.append(d_ll[draws].mean(axis=1))
+        boot_acc.append(d_acc[draws].mean(axis=1))
+    boot_ll, boot_acc = np.concatenate(boot_ll), np.concatenate(boot_acc)
+    delta = float(d_ll.mean())
+    ci = [float(np.percentile(boot_ll, 2.5)), float(np.percentile(boot_ll, 97.5))]
+    if same_model:
+        verdict = "same model (Δ = 0)"
+    elif ci[1] < 0 and delta <= -PRACTICAL_DELTA:
+        verdict = "improved"
+    elif ci[0] > 0:
+        verdict = "worse"
+    else:
+        verdict = "no detectable difference"
+
+    def auc(p):
+        try:
+            return float(roc_auc_score(index, p[:, 1])) if len(labels) == 2 else float(roc_auc_score(index, p, multi_class="ovr"))
+        except ValueError:
+            return float("nan")
+
+    return {"n": n, "primary": {"endpoint": "fresh-test log loss difference, selected - pretrained", "delta": delta, "ci95": ci, "verdict": verdict, "practical_delta": PRACTICAL_DELTA, "bootstrap": dict(BOOTSTRAP)}, "log_loss": {"pretrained": float(ll_a.mean()), "selected": float(ll_b.mean())}, "accuracy": {"pretrained": float(ok_a.mean()), "pretrained_wilson95": wilson(int(ok_a.sum()), n), "selected": float(ok_b.mean()), "selected_wilson95": wilson(int(ok_b.sum()), n), "difference": float(d_acc.mean()), "difference_ci95": [float(np.percentile(boot_acc, 2.5)), float(np.percentile(boot_acc, 97.5))]}, "roc_auc": {"pretrained": auc(pa), "selected": auc(pb)}}
+
+
+def fresh_test_probabilities(run: Run, P, cond: dict, test):
+    """(y, p_pretrained, p_selected, classes, max_row_sum_deviation) on the fresh test, both models conditioned on the
+    same support rows at the inference ensemble size."""
+    import numpy as np
+
+    enc, train, _holdout, _ = encoded(run, "fresh_test")
+    features, target = enc["features"], enc["target"]
+    test = P.align_to_schema(test, features, target, enc["classes"])
+    test, _ = P.apply_categorical_encoder(test, enc["encoders"])
+    pre = pretrained(run)
+    pre.fit(train[features], train[target])
+    raw = np.asarray(pre.estimator.predict_proba(test[features]), dtype=float)
+    p_pre, deviation = P.renormalise_probabilities(raw)
+    if cond["active_mode"] == "pretrained":
+        p_sel = p_pre
+    else:
+        sel = from_checkpoint(run, Path(cond["active_checkpoint"]), pre, "fine-tuned")
+        sel.fit(train[features], train[target])
+        p_sel = sel.predict_proba(test[features])
+    return test[target].to_numpy(), p_pre, p_sel, [str(c) for c in pre.classes_], deviation
+
+
+def read_ledger(path: Path) -> tuple[list[dict[str, Any]], bool]:
+    """(entries, corrupt). A corrupt or malformed ledger is set aside, never trusted and never a crash."""
+    if not path.is_file():
+        return [], False
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(value, dict) and isinstance(value.get("entries"), list):
+            return value["entries"], False
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        pass
+    n = 1
+    while path.with_name(f"ledger.corrupt-{n}.json").exists():
+        n += 1
+    os.replace(path, path.with_name(f"ledger.corrupt-{n}.json"))
+    print(f"The fresh-test ledger was unreadable and was set aside as ledger.corrupt-{n}.json; this scoring is labelled a reproduction, never the first evaluation.")
+    return [], True
+
+
+def next_index(folder: Path, kind: str) -> int:
+    return len(list(folder.glob(f"{STEM}_fresh_test_{kind}_*.json"))) + 1
+
+
+def stage_fresh_test(run: Run) -> None:
+    import pandas as pd
+
+    masked = fresh_test_masked()
+    print({"fresh_test_mask": f"{MASK_ENV}=1" if masked else f"{MASK_ENV} unset"})
+    if masked:
+        print("Fresh test masked: it is not read, scored or recorded in this run (not a look).")
+        return
+    P = package(run.root)
+    data = run.read_state("data.json", "fresh_test")
+    if data["source"] != MAGIC_SOURCE:
+        print(f"No fresh test for {data['source']!r}: the fresh test belongs to the pre-registered MAGIC sample. Section 7 showed this source's {data.get('test_role', 'test')}.")
+        return
+    cond = run.read_state("condition.json", "fresh_test")
+    fresh = run.out / FRESH_DIR
+    # Reset and recompute: nothing cached by an earlier stage is trusted.
+    differing = settings_differing(cond.get("settings") or {})
+    grid = cond.get("grid") or []
+    checks = {"grid_complete": [g.get("id") for g in grid] == [c["id"] for c in GRID] and all(g.get("complete") for g in grid)}
+    checks["grid_hash_matches"] = checks["grid_complete"] and grid_hash(grid, cond.get("selection", "")) == cond.get("grid_hash")
+    active = Path(cond.get("active_checkpoint", ""))
+    checks["selected_model_matches"] = active.is_file() and sha256_file(active) == cond.get("active_checkpoint_sha256")
+    cache = run.root / "inputs" / "magic-gamma.zip"
+    payload = cache.read_bytes() if cache.is_file() else b""
+    checks["fresh_pool_digest"] = hashlib.sha256(payload).hexdigest() == MAGIC_SHA256
+    validation = {"pretrained": cond.get("pretrained_holdout"), "selected_config_candidate": cond.get("candidate_holdout"), "selection": cond.get("selection")}
+    if differing:
+        record = {"test_look": TEST_LOOKS[2], "settings_differing": differing, "preregistered": False, "validation_only": validation, "exploratory_readout": cond.get("exploratory_readout"), "note": "This run differs from the pre-registration, so the fresh test was not read. Only the pre-registered settings on a Tesla T4 score it; see docs/release-verification.md for the recorded evaluation and its reproductions."}
+        out = atomic_write_json(fresh / f"{STEM}_fresh_test_exploratory_{next_index(fresh, 'exploratory')}.json", record)
+        print({"test_look": TEST_LOOKS[2], "settings_differing": differing, "written": f"outputs/{FRESH_DIR}/{out.name}"})
+        return
+    failed = [k for k, v in checks.items() if not v]
+    if failed:
+        raise RuntimeError(f"fresh test not scored: pre-scoring check(s) failed {failed}; this is not a look. Re-run the notebook from Section 4.")
+    test_bytes = magic_member(payload, "test.csv")  # digest-checked; parsed only below
+    ledger_path = fresh / "ledger.json"
+    entries, corrupt = read_ledger(ledger_path)
+    first_report = fresh / f"{STEM}_fresh_test_report.json"
+    first = RECORDED_EVALUATION is None and not corrupt and not entries and not first_report.exists()
+    label = TEST_LOOKS[0] if first else TEST_LOOKS[1]
+    test = P.read_csv_payload(test_bytes, "test.csv")
+    keys = {}
+    for member in ("train.csv", "val.csv", "test.csv"):
+        frame = pd.read_csv(io.BytesIO(test_bytes if member == "test.csv" else magic_member(payload, member)), dtype=str, keep_default_na=False)
+        keys[member] = frame.drop(columns=["target"]).agg(",".join, axis=1)
+    duplicated = keys["test.csv"].isin(set(keys["train.csv"]) | set(keys["val.csv"])).to_numpy()
+    y, p_pre, p_sel, classes, deviation = fresh_test_probabilities(run, P, cond, test)
+    same = cond["active_mode"] == "pretrained"
+    reading = fresh_test_reading(y, p_pre, p_sel, classes, same_model=same)
+    sensitivity = fresh_test_reading(y, p_pre, p_sel, classes, same_model=same, exclude=duplicated)
+    report = {"test_look": label, "settings_differing": [], "preregistered": True, "recorded_evaluation": RECORDED_EVALUATION, "checks": checks, "selected": {"mode": cond["active_mode"], "selection": cond["selection"]}, "grid_hash": cond["grid_hash"], "device": cond.get("device_name"), "determinism": (cond.get("settings") or {}).get("determinism"), "fresh_test": {"rows": len(y), "member_sha256": MAGIC_MEMBERS["test.csv"], "row_ids_sha256": MAGIC_ROW_IDS_SHA256["test"], "max_probability_row_sum_deviation": deviation}, **reading, "sensitivity_without_duplicated_rows": {"excluded_rows": int(duplicated.sum()), **{k: sensitivity[k] for k in ("n", "primary")}}, "power": "planning estimates: a single accuracy on 1,500 rows about ±0.017 (Wilson); a paired accuracy difference about ±0.011 at 5 % discordance; a paired log-loss difference about ±0.017 (pessimistic proxy)", "validation": validation, "exploratory_readout": cond.get("exploratory_readout"), "notebook_source": json.loads((run.root / "source.json").read_text(encoding="utf-8")) if (run.root / "source.json").is_file() else {}}
+    out = first_report if first else fresh / f"{STEM}_fresh_test_reproduction_{next_index(fresh, 'reproduction')}.json"
+    atomic_write_json(out, report)  # the look counts from here: the report is written
+    entries.append({"file": out.name, "test_look": label, "device": cond.get("device_name"), "grid_hash": cond["grid_hash"], "delta": reading["primary"]["delta"]})
+    atomic_write_json(ledger_path, {"entries": entries})
+    print({"test_look": label, "written": f"outputs/{FRESH_DIR}/{out.name}", "selected": cond["active_mode"]})
+    print(rounded({"primary": reading["primary"], "accuracy": reading["accuracy"], "roc_auc": reading["roc_auc"], "sensitivity_without_duplicated_rows": report["sensitivity_without_duplicated_rows"]}))
+    print("Scored only under the pre-registered settings; see docs/release-verification.md for the recorded evaluation and its reproductions.")
 
 
 def stage_report(run: Run) -> None:
@@ -488,11 +924,13 @@ def stage_report(run: Run) -> None:
         pb = best_w * pt + (1.0 - best_w) * pl
         tab_test = P.classification_metrics(y_test, predt, pt, classes)
         blend_test = P.classification_metrics(y_test, np.asarray(classes, dtype=object)[np.argmax(pb, axis=1)], pb, classes)
-        print({"independent_test": rounded({"tabicl": tab_test, "lightgbm": P.classification_metrics(y_test, predl, pl, classes), "blend": blend_test})})
+        print({data.get("test_role", "independent test"): rounded({"tabicl": tab_test, "lightgbm": P.classification_metrics(y_test, predl, pl, classes), "blend": blend_test})})
         if blend["accuracy"] > classical["tabicl_" + cond["active_mode"]]["accuracy"] and blend_test["accuracy"] <= tab_test["accuracy"]:
             print("WARNING mixed evidence: the blend improved holdout accuracy but not independent-test accuracy; treat the holdout gain as selection-biased.")
     else:
-        print("No independent test partition; the holdout blend score is selection-biased demonstration evidence.")
+        if data["source"] == MAGIC_SOURCE:
+            print("The MAGIC fresh test is not read here: the fresh_test stage (Section 7b) scores it, only under the pre-registered settings.")
+        print("The validation blend score is selection-biased demonstration evidence (the weight was chosen on validation).")
     active_holdout = cond["candidate_holdout"] if cond["active_mode"] == "fine-tuned" else cond["pretrained_holdout"]
     active_test = cond["candidate_test"] if cond["active_mode"] == "fine-tuned" else cond["pretrained_test"]
     report = P.evaluation_report(active_holdout, baseline=enc["baseline"], independent_test=active_test, n_holdout=n, n_test=None if test is None else len(test), class_labels=classes, target_column=target, selection=cond["selection"], sample_kind=data["sample_kind"], estimation="single seeded stratified split (support/holdout/independent test); no dispersion estimate")
@@ -500,7 +938,13 @@ def stage_report(run: Run) -> None:
     report["holdout_errors"] = errors
     report["blend_holdout"] = {"weight_tabicl": best_w, "tied_weight_range": [min(tied), max(tied)], **blend}
     report["fine_tune"] = cond["fine_tune"]
-    report["interpretation"] = f"One holdout row is {1.0 / n:.4f} of accuracy ({n} rows); differences of a row or two between models are within that resolution, and no dispersion over splits was measured."
+    report["fine_tune_grid"] = cond.get("grid")
+    report["grid_hash"] = cond.get("grid_hash")
+    report["selection_tolerance"] = cond.get("selection_tolerance")
+    report["exploratory_readout"] = cond.get("exploratory_readout")
+    report["test_role"] = data.get("test_role")
+    report["fresh_test"] = {"scored_by": "fresh_test stage", "preregistered": cond.get("preregistered"), "settings_differing": cond.get("settings_differing"), "files": f"outputs/{FRESH_DIR}/"}
+    report["interpretation"] = f"One validation row is {1.0 / n:.4f} of accuracy ({n} rows). Log loss is the pre-registered primary metric because it registers changes accuracy cannot; no dispersion over splits was measured."
     run.write_output(f"{STEM}_evaluation_report.json", report)
     print(json.dumps({k: report[k] for k in ("verdict", "reason", "decision_rule", "selection", "n_holdout", "n_test", "interpretation")}, indent=2))
 
@@ -723,7 +1167,9 @@ STAGES = {
     "export": stage_export,
     "reload": stage_reload,
     "activity": stage_activity,
+    "fresh_test": stage_fresh_test,
 }
+REFUSAL_STAGES = {"data", "validate", "predict"}  # input refusals there are shown as one message, not a traceback (DAT20)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -734,6 +1180,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stage", choices=sorted(STAGES), required=True)
     parser.add_argument("--options", default="{}")
     args = parser.parse_args(argv)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = DETERMINISM["CUBLAS_WORKSPACE_CONFIG"]  # before CUDA initialises
     run = Run(args.root.resolve(), args.outputs.resolve(), args.weights.resolve(), json.loads(args.options))
     error_file = run.state / f"{args.stage}.error.json"
     error_file.unlink(missing_ok=True)
@@ -741,7 +1188,8 @@ def main(argv: list[str] | None = None) -> int:
         STAGES[args.stage](run)
     except BaseException as exc:  # noqa: BLE001 -- every failure is reported to the kernel with its own message
         traceback.print_exc()
-        error_file.write_text(json.dumps({"type": type(exc).__name__, "message": str(exc)}), encoding="utf-8")
+        refusal = args.stage in REFUSAL_STAGES and isinstance(exc, ValueError | FileNotFoundError)
+        atomic_write_json(error_file, {"type": type(exc).__name__, "message": str(exc), "refusal": refusal})
         return 1
     return 0
 

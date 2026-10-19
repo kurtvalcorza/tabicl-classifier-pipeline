@@ -80,7 +80,7 @@ def test_par2_lock_pins_every_runtime_pin_with_hashes(name: str) -> None:
     build.check_lock(build._pins(ROOT), lock)  # raises SystemExit on any drift or unhashed entry
     meta = _notebook(template)["metadata"]["dimer"]
     assert meta["standalone"] is True
-    assert meta["notebook_spec"] == build.NOTEBOOK_SPEC
+    assert meta["notebook_spec"] == template.get("notebook_spec", build.NOTEBOOK_SPEC)
     assert meta["generated_from"]["module"] == f"src/{template['package']}/{template.get('entry_module', 'pipeline.py')}"
     assert meta["generated_from"]["module_sha256"] == build.load_context(ROOT, template)["module_sha256"]
 

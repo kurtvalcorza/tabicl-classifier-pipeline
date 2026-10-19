@@ -88,10 +88,10 @@ main_all, inf_all = text(main_nb), text(inf_nb)
 main_own, inf_own = code_text(main_nb, outside_modules=True), code_text(inf_nb, outside_modules=True)
 
 # Profiles / learning contract (the carrier-level checks are the validator's).
-for nb, profile, label in ((main_nb, "E2E", "main"), (inf_nb, "ARTIFACT-INFERENCE", "artifact")):
+for nb, profile, label, spec_version in ((main_nb, "E2E", "main", "2.5"), (inf_nb, "ARTIFACT-INFERENCE", "artifact", "2.2")):
     dimer = nb.get("metadata", {}).get("dimer", {})
     require(dimer.get("notebook_profile") == profile, f"{label} profile metadata")
-    require(dimer.get("notebook_spec") == "2.2" and dimer.get("standalone") is True, f"{label} must be standalone spec 2.2")
+    require(dimer.get("notebook_spec") == spec_version and dimer.get("standalone") is True, f"{label} must be standalone spec {spec_version}")
 for marker in ("**Profile:** `E2E`", "**This notebook is standalone.**", "## Interpretation and limits"):
     require(marker in main_all, f"main missing {marker!r}")
 for marker in ("**Profile:** `ARTIFACT-INFERENCE`", "**This notebook is standalone.**", "## Interpretation and limits"):
@@ -150,9 +150,9 @@ for marker in ("create_classifier(", "serving.fit(", "serving.predict(", "servin
 # without CUDA the stage records why it was skipped. Statically protect its callable path and its guards.
 require("RUN_FINE_TUNING = True  # @param" in main_own, "fine-tune gate must default to True (TIC-M2)")
 require("finetuner = P.create_finetuned_classifier(" in main_own, "fine-tune constructor does not use repository API")
-require('"time_limit": 300' in main_own and '"epochs": 3' in main_own, "the default fine-tune must stay bounded (3 epochs, 300 s)")
+require('"epochs": 30, "patience": 8' in main_own and '"time_limit": 1800' in main_own and '"max_data_size": 500' in main_own and '"use_lr_scheduler": False' in main_own, "the default fine-tune must be the pre-registered grid (R96-M3: real steps, no zero-LR step, bounded)")
 require(
-    main_own.index("if run_ft and not torch.cuda.is_available():") < main_own.index('ft_dir = run.state / "finetune"'),
+    main_own.index('if run_ft and device != "cuda" and not cpu_grid:') < main_own.index("grid.append(run_config("),
     "fine-tune workspace must be initialized after the CUDA guard",
 )
 require("MIN_SELECTION_HOLDOUT_ROWS = 50" in main_own, "selection evidence guard missing")
@@ -194,7 +194,7 @@ for label, content in (("main", main_all), ("artifact", inf_all)):
 # Registry.
 registry = README.read_text(encoding="utf-8")
 require("| `E2E` |" in registry and "| `ARTIFACT-INFERENCE` |" in registry, "tutorial registry missing profiles")
-require("DIMER Notebook Specification 2.2" in registry, "tutorial registry missing spec version")
+require("DIMER Notebook Specification 2.5" in registry and "DIMER Notebook Specification 2.2" in registry, "tutorial registry missing spec versions")
 require("requirements-release.lock" in registry, "tutorial registry does not document transitive lock")
 
 # Executor evidence contract (the previous pair's kernel executor; must not fake execution).
