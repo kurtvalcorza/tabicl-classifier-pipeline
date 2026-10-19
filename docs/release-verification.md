@@ -142,6 +142,8 @@ was not exercised). They are not hosted runs and do not change the status.
 | 2026-10-11 | companion `cb92a9e84376` | defaults (pinned sample bundle and rows) | 21 s | 9/9 cells, no dialog, `trusted_digest: verified`, checkpoint bound to the base; labels identical to the E2E run on the same eight rows, max prob. diff 1.1e-10 |
 | 2026-10-11 | companion (previous blob, same stages) | the E2E ZIP by `ARTIFACT_ZIP_PATH` + its printed digest + its `new_rows.csv`, `RUN_ACTIVITY` | 66 s | 9/9 cells, `trusted_digest: verified (EXPECTED_ZIP_SHA256)`, `sample_kind: BYOD`, same predictions |
 
+**Local-path redaction (2026-10-19, R96-m4).** The two 2026-10-10 `_exec.log` files carried the executor's local home directory in 2 lines each. That prefix was replaced by `<runner>/` in a separate commit; nothing else changed. SHA-256 before → after: `tabiclv2_classifier_colab_f59e233_colab-cli-t4_exec.log` `9b3074714ee35eb2830cc335c6fdd1e9e1ff8ccadfac161010d8220a56cf65a4` → `8dc1cfa361052293d3f042536759dee8a58b31d9f57889b505c360910e5d9821`; `tabiclv2_classifier_artifact_inference_colab_f59e233_colab-cli-t4_exec.log` `3c1663ee88dcf934dc2486ed0f6f0f87e86aea3401557daa2ab623e7fec3b4d5` → `fa82c03ad0cf79c5204776477c466c08cc1ff71494173777353233fd5a37e6b3`. The executed notebooks and run summaries carried no local path and are unchanged.
+
 On a generic Linux kernel the `report` stage needs the system OpenMP library (`libgomp.so.1`, Debian/Ubuntu `libgomp1`)
 for LightGBM; Colab and Kaggle images have it. The local drives supplied it from the locked `torch` wheel.
 
