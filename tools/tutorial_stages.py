@@ -20,6 +20,7 @@ The ``data`` and ``validate`` stages import no model library, so CI exercises th
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import importlib
 import io
@@ -27,6 +28,7 @@ import json
 import math
 import os
 import random
+import re
 import shutil
 import sys
 import traceback
@@ -79,7 +81,11 @@ SELECTION_TIE = 1e-4
 INFERENCE_ESTIMATORS = 8
 BOOTSTRAP = {"seed": 20261019, "n_boot": 10000}
 PRACTICAL_DELTA = 0.005  # "improved" needs the CI upper bound < 0 and delta <= -PRACTICAL_DELTA
-DETERMINISM = {"CUBLAS_WORKSPACE_CONFIG": ":4096:8", "cudnn_deterministic": True, "cudnn_benchmark": False, "deterministic_algorithms": True, "warn_only": False, "seed": SEED}
+DETERMINISM = {"CUBLAS_WORKSPACE_CONFIG": ":4096:8", "cudnn_deterministic": True, "cudnn_benchmark": False, "deterministic_algorithms": True, "warn_only": False, "seed": SEED, "sdpa_backend": "MATH", "flash_attn3": False}
+# Amendment 2: every stage that runs the model does so inside deterministic_kernels() (MATH attention, FlashAttention-3 off).
+MODEL_STAGES = frozenset(("condition", "report", "fresh_test", "predict", "export", "reload", "activity"))
+DETERMINISM_WARNING = re.compile(r"determinis|non-?deterministic|memory.efficient|mem_efficient|efficient attention", re.IGNORECASE)
+_CAUGHT_WARNINGS: list = []  # the warnings recorded by the active deterministic_kernels() context
 REQUIRED_DEVICE = "Tesla T4"
 MASK_ENV = "DIMER_MASK_FRESH_TEST"
 # The first hosted T4 run under the pre-registered settings, once recorded in docs/release-verification.md (commit, blob, date).
@@ -120,7 +126,64 @@ def apply_determinism() -> dict[str, Any]:
     random.seed(SEED)
     np.random.seed(SEED)
     torch.manual_seed(SEED)
-    return {"CUBLAS_WORKSPACE_CONFIG": os.environ.get("CUBLAS_WORKSPACE_CONFIG"), "cudnn_deterministic": bool(torch.backends.cudnn.deterministic), "cudnn_benchmark": bool(torch.backends.cudnn.benchmark), "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()), "warn_only": bool(torch.is_deterministic_algorithms_warn_only_enabled()), "seed": SEED}
+    return {"CUBLAS_WORKSPACE_CONFIG": os.environ.get("CUBLAS_WORKSPACE_CONFIG"), "cudnn_deterministic": bool(torch.backends.cudnn.deterministic), "cudnn_benchmark": bool(torch.backends.cudnn.benchmark), "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()), "warn_only": bool(torch.is_deterministic_algorithms_warn_only_enabled()), "seed": SEED, **attention_backend()}
+
+
+def attention_backend() -> dict[str, Any]:
+    """The attention path as PyTorch and tabicl report it now (observed, not assumed): ``sdpa_backend`` is "MATH" only when
+    the math kernel is the sole enabled SDPA backend; ``flash_attn3`` is tabicl's own FlashAttention-3 switch."""
+    import torch
+
+    cuda = torch.backends.cuda
+    enabled = {"FLASH": cuda.flash_sdp_enabled(), "MEM_EFFICIENT": cuda.mem_efficient_sdp_enabled(), "MATH": cuda.math_sdp_enabled(), "CUDNN": bool(getattr(cuda, "cudnn_sdp_enabled", lambda: False)())}
+    names = sorted(name for name, on in enabled.items() if on)
+    try:
+        tabicl_attention = importlib.import_module("tabicl._model.attention")
+        flash3 = bool(getattr(tabicl_attention, "HAS_FLASH_ATTN3", False) and getattr(tabicl_attention, "_use_flash_attn3", False))
+    except ImportError:
+        flash3 = None
+    return {"sdpa_backend": "+".join(names) or "NONE", "flash_attn3": flash3}
+
+
+def determinism_warnings() -> list[str]:
+    """Determinism-related warnings captured so far in this stage (e.g. a kernel that only warns)."""
+    return sorted({str(w.message) for w in _CAUGHT_WARNINGS if DETERMINISM_WARNING.search(str(w.message))})
+
+
+@contextlib.contextmanager
+def deterministic_kernels():
+    """Amendment 2: the MATH SDPA backend and tabicl's FlashAttention-3 path off around a whole model stage (fine-tuning
+    and every inference), the pre-registered determinism flags, and every Python warning captured; determinism-related
+    warnings are printed, so a non-deterministic kernel that only warns shows up in the log."""
+    import warnings
+
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    tabicl_attention = importlib.import_module("tabicl._model.attention")  # the upstream attention switch, not the model API
+
+    with contextlib.ExitStack() as stack:
+        caught = stack.enter_context(warnings.catch_warnings(record=True))
+        warnings.simplefilter("always")
+        stack.enter_context(sdpa_kernel(SDPBackend.MATH))
+        stack.enter_context(tabicl_attention.flash_attn3_toggle(False))
+        # tabicl's inference re-toggles FA3 from its own `use_fa3` per forward pass; switching the capability flag off
+        # too makes the path unreachable for the whole stage (flash_attn_interface is not in the lock anyway).
+        stack.callback(setattr, tabicl_attention, "HAS_FLASH_ATTN3", getattr(tabicl_attention, "HAS_FLASH_ATTN3", False))
+        tabicl_attention.HAS_FLASH_ATTN3 = False
+        globals()["_CAUGHT_WARNINGS"] = caught  # determinism_warnings() reads the live record during the stage
+        apply_determinism()
+        try:
+            yield
+        finally:
+            seen = set()
+            for w in caught:
+                text = f"{w.category.__name__}: {w.message}"
+                if text in seen:
+                    continue
+                seen.add(text)
+                prefix = "DETERMINISM WARNING" if DETERMINISM_WARNING.search(str(w.message)) else "warning"
+                print(f"{prefix}: {text}", flush=True)
+            globals()["_CAUGHT_WARNINGS"] = list(caught)
 
 
 def device_name() -> str:
@@ -536,13 +599,13 @@ def settings_differing(settings: dict[str, Any]) -> list[str]:
     return differing
 
 
-def grid_hash(grid: list[dict[str, Any]], selection: str) -> str:
+def grid_hash(grid: list[dict[str, Any]], selection: str, sdpa_backend: str | None) -> str:
     """Fingerprint of the grid's outcome, so two runs (e.g. two masked hosted runs) can be compared digit for digit."""
     def r(value):
         return None if value is None else round(float(value), 6)
 
     rows = [{"id": g.get("id"), "epochs_run": g.get("epochs_run"), "curve": [r(v) for v in g.get("val_log_loss_per_epoch") or []], "baseline": r(g.get("baseline_val_log_loss")), "candidate_val_log_loss": r((g.get("candidate_val") or {}).get("log_loss")), "delta_best": r(g.get("param_delta_l2_best")), "delta_last": r(g.get("param_delta_l2_last_epoch"))} for g in grid]
-    return hashlib.sha256(json.dumps({"grid": rows, "selection": selection}, sort_keys=True).encode("utf-8")).hexdigest()
+    return hashlib.sha256(json.dumps({"grid": rows, "selection": selection, "sdpa_backend": sdpa_backend}, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def model_state(pipeline) -> dict[str, Any]:
@@ -732,8 +795,8 @@ def stage_condition(run: Run) -> None:
         model = from_checkpoint(run, Path(active_checkpoint), pipe, "fine-tuned")
         model.fit(X_train, y_train)
         candidate_test = score(P, model, test, enc)
-    ghash = grid_hash(grid, selection)
-    record = {"active_mode": active_mode, "active_checkpoint": active_checkpoint, "active_checkpoint_sha256": sha256_file(Path(active_checkpoint)), "selection": selection, "selection_tolerance": SELECTION_TOLERANCE, "eval_metric": "log_loss", "fine_tune": fine_tune, "grid": grid, "grid_hash": ghash, "exploratory_readout": readout, "pretrained_holdout": pretrained_holdout, "pretrained_test": pretrained_test, "candidate_holdout": candidate_holdout, "candidate_test": candidate_test, "test_role": test_role, "classes": [str(c) for c in pipe.classes_], "device": pipe.device, "device_name": name, "settings": settings, "settings_differing": differing, "preregistered": not differing}
+    ghash = grid_hash(grid, selection, determinism.get("sdpa_backend"))
+    record = {"active_mode": active_mode, "active_checkpoint": active_checkpoint, "active_checkpoint_sha256": sha256_file(Path(active_checkpoint)), "selection": selection, "selection_tolerance": SELECTION_TOLERANCE, "eval_metric": "log_loss", "fine_tune": fine_tune, "grid": grid, "grid_hash": ghash, "exploratory_readout": readout, "pretrained_holdout": pretrained_holdout, "pretrained_test": pretrained_test, "candidate_holdout": candidate_holdout, "candidate_test": candidate_test, "test_role": test_role, "classes": [str(c) for c in pipe.classes_], "device": pipe.device, "device_name": name, "settings": settings, "settings_differing": differing, "preregistered": not differing, "determinism_warnings": determinism_warnings()}
     run.write_state("condition.json", record)
     print({"recommended_for_export": active_mode, "selection_basis": selection, "grid_hash": ghash, "device": name, "classes_": record["classes"]})
     if readout:
@@ -870,7 +933,8 @@ def stage_fresh_test(run: Run) -> None:
     differing = settings_differing(cond.get("settings") or {})
     grid = cond.get("grid") or []
     checks = {"grid_complete": [g.get("id") for g in grid] == [c["id"] for c in GRID] and all(g.get("complete") for g in grid)}
-    checks["grid_hash_matches"] = checks["grid_complete"] and grid_hash(grid, cond.get("selection", "")) == cond.get("grid_hash")
+    sdpa = ((cond.get("settings") or {}).get("determinism") or {}).get("sdpa_backend")
+    checks["grid_hash_matches"] = checks["grid_complete"] and grid_hash(grid, cond.get("selection", ""), sdpa) == cond.get("grid_hash")
     active = Path(cond.get("active_checkpoint", ""))
     checks["selected_model_matches"] = active.is_file() and sha256_file(active) == cond.get("active_checkpoint_sha256")
     cache = run.root / "inputs" / "magic-gamma.zip"
@@ -1236,7 +1300,11 @@ def main(argv: list[str] | None = None) -> int:
     error_file = run.state / f"{args.stage}.error.json"
     error_file.unlink(missing_ok=True)
     try:
-        STAGES[args.stage](run)
+        if args.stage in MODEL_STAGES:
+            with deterministic_kernels():
+                STAGES[args.stage](run)
+        else:
+            STAGES[args.stage](run)
     except BaseException as exc:  # noqa: BLE001 -- every failure is reported to the kernel with its own message
         traceback.print_exc()
         refusal = args.stage in REFUSAL_STAGES and isinstance(exc, ValueError | FileNotFoundError)

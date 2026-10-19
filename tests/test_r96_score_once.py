@@ -51,7 +51,7 @@ def _setup(tmp_path: Path, **settings_changes) -> S.Run:
     settings = {**json.loads(json.dumps(S.PREREGISTERED)), "device": "Tesla T4", **settings_changes}
     grid = _grid()
     selection = "validation:log_loss; pretrained kept"
-    run.write_state("condition.json", {"active_mode": "pretrained", "active_checkpoint": str(ckpt), "active_checkpoint_sha256": hashlib.sha256(ckpt.read_bytes()).hexdigest(), "selection": selection, "grid": grid, "grid_hash": S.grid_hash(grid, selection), "settings": settings, "pretrained_holdout": {"log_loss": 0.2634}, "candidate_holdout": {"log_loss": 0.2634}, "device_name": settings["device"]})
+    run.write_state("condition.json", {"active_mode": "pretrained", "active_checkpoint": str(ckpt), "active_checkpoint_sha256": hashlib.sha256(ckpt.read_bytes()).hexdigest(), "selection": selection, "grid": grid, "grid_hash": S.grid_hash(grid, selection, (settings.get("determinism") or {}).get("sdpa_backend")), "settings": settings, "pretrained_holdout": {"log_loss": 0.2634}, "candidate_holdout": {"log_loss": 0.2634}, "device_name": settings["device"]})
     return run
 
 
@@ -222,7 +222,7 @@ def test_grid_is_the_preregistered_one_and_takes_real_steps() -> None:
     assert [(c["id"], c["learning_rate"], c["epochs"], c["patience"]) for c in S.GRID] == [("C1", 1e-5, 30, 8), ("C2", 5e-5, 10, 3), ("C3", 1e-6, 10, 3)]
     assert S.GRID_COMMON["max_data_size"] == 500 and S.GRID_COMMON["use_lr_scheduler"] is False and S.GRID_COMMON["eval_metric"] == "log_loss"
     assert S.SELECTION_TOLERANCE == 0.005 and "more than 0.005" in doc and "**`max_data_size` 500**" in doc
-    assert S.DETERMINISM == {"CUBLAS_WORKSPACE_CONFIG": ":4096:8", "cudnn_deterministic": True, "cudnn_benchmark": False, "deterministic_algorithms": True, "warn_only": False, "seed": 42}
+    assert S.DETERMINISM == {"CUBLAS_WORKSPACE_CONFIG": ":4096:8", "cudnn_deterministic": True, "cudnn_benchmark": False, "deterministic_algorithms": True, "warn_only": False, "seed": 42, "sdpa_backend": "MATH", "flash_attn3": False}
     assert S.MAGIC_ROW_IDS_SHA256["test"] == "8847cab4e87c8ff30dd6a27045464f7891b2e14dd39149c5e5648348f190f3e4"
     assert hashlib.sha256(ZIP.read_bytes()).hexdigest() == S.MAGIC_SHA256
     assert S.MAGIC_COMMIT in S.MAGIC_URL and S.RECORDED_EVALUATION is None
@@ -419,3 +419,100 @@ def test_F1_quoted_grid_numbers_come_from_the_committed_cpu_record() -> None:
     assert "0.29–0.36" not in text and "every epoch *worse*" not in text and "every epoch scored worse" not in text
     assert "11cb0310" in text and "CPU development run" in text
     assert "suppose a config reports `weights_changed: False`" in text and "`weights_changed: True`" in text  # conditional, both outcomes
+
+
+# ---------------------------------------------------------------- round 3 (amendment 2): MATH SDPA backend, warnings surfaced
+
+
+@pytest.fixture
+def fake_torch(monkeypatch):
+    """Stand-ins for torch and tabicl's attention module (CI has neither): they record whether the MATH-only SDPA context
+    and tabicl's FlashAttention-3 switch are active, as the real ones set global backend flags."""
+    import contextlib
+    import sys
+
+    state = {"flash": True, "mem": True, "math": True, "cudnn": False, "det": False, "math_ctx": False}
+
+    @contextlib.contextmanager
+    def sdpa_kernel(backend):
+        saved = dict(state)
+        state.update(flash=False, mem=False, cudnn=False, math=(backend == "MATH"), math_ctx=True)
+        try:
+            yield
+        finally:
+            state.update(saved)
+
+    attention = types.ModuleType("tabicl._model.attention")
+    attention._use_flash_attn3 = True
+    attention.HAS_FLASH_ATTN3 = True
+
+    @contextlib.contextmanager
+    def flash_attn3_toggle(enabled):
+        old = attention._use_flash_attn3
+        attention._use_flash_attn3 = enabled
+        try:
+            yield
+        finally:
+            attention._use_flash_attn3 = old
+
+    attention.flash_attn3_toggle = flash_attn3_toggle
+    torch = types.ModuleType("torch")
+    torch.backends = types.SimpleNamespace(
+        cudnn=types.SimpleNamespace(deterministic=False, benchmark=True),
+        cuda=types.SimpleNamespace(flash_sdp_enabled=lambda: state["flash"], mem_efficient_sdp_enabled=lambda: state["mem"], math_sdp_enabled=lambda: state["math"], cudnn_sdp_enabled=lambda: state["cudnn"]),
+    )
+    torch.use_deterministic_algorithms = lambda value: state.update(det=value)
+    torch.are_deterministic_algorithms_enabled = lambda: state["det"]
+    torch.is_deterministic_algorithms_warn_only_enabled = lambda: False
+    torch.manual_seed = lambda seed: None
+    nn = types.ModuleType("torch.nn")
+    nn_attention = types.ModuleType("torch.nn.attention")
+    nn_attention.SDPBackend = types.SimpleNamespace(MATH="MATH")
+    nn_attention.sdpa_kernel = sdpa_kernel
+    for name, module in {"torch": torch, "torch.nn": nn, "torch.nn.attention": nn_attention, "tabicl": types.ModuleType("tabicl"), "tabicl._model": types.ModuleType("tabicl._model"), "tabicl._model.attention": attention}.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    return state, attention
+
+
+@pytest.mark.parametrize("stage", ["condition", "fresh_test", "report", "predict", "export", "reload"])
+def test_A2_every_model_stage_runs_inside_the_math_backend(tmp_path, fake_torch, monkeypatch, stage) -> None:
+    state, attention = fake_torch
+    seen = {}
+
+    def fake_stage(run):  # what fine-tuning and every predict_proba inside the stage would see
+        seen.update(math_ctx=state["math_ctx"], flash3=attention._use_flash_attn3 or attention.HAS_FLASH_ATTN3, det=state["det"], backend=S.attention_backend())
+
+    monkeypatch.setitem(S.STAGES, stage, fake_stage)
+    assert _quiet(S.main, ["--root", str(tmp_path / "run"), "--outputs", str(tmp_path / "out"), "--weights", str(tmp_path / "w"), "--stage", stage]) == 0
+    assert seen == {"math_ctx": True, "flash3": False, "det": True, "backend": {"sdpa_backend": "MATH", "flash_attn3": False}}
+    assert state["math_ctx"] is False and attention._use_flash_attn3 is True  # restored after the stage
+    assert stage in S.MODEL_STAGES and "data" not in S.MODEL_STAGES
+
+
+def test_A2_sdpa_backend_is_recorded_and_preregistered(fake_torch) -> None:
+    with S.deterministic_kernels():
+        record = S.apply_determinism()
+    assert record["sdpa_backend"] == "MATH" and record["flash_attn3"] is False
+    assert {k: record[k] for k in S.DETERMINISM if k != "CUBLAS_WORKSPACE_CONFIG"} == {k: v for k, v in S.DETERMINISM.items() if k != "CUBLAS_WORKSPACE_CONFIG"}
+    base = {**json.loads(json.dumps(S.PREREGISTERED)), "device": "Tesla T4"}
+    assert S.settings_differing(base) == []
+    for other in ("FLASH+MATH+MEM_EFFICIENT", "MEM_EFFICIENT"):
+        changed = json.loads(json.dumps(base))
+        changed["determinism"]["sdpa_backend"] = other
+        assert "determinism" in S.settings_differing(changed)
+    grid = _grid()
+    assert S.grid_hash(grid, "s", "MATH") != S.grid_hash(grid, "s", "MEM_EFFICIENT")  # the backend is a grid-hash input
+
+
+def test_A2_a_determinism_warning_is_surfaced(tmp_path, fake_torch, monkeypatch, capsys) -> None:
+    import warnings
+
+    def warns(run):
+        warnings.warn("Memory Efficient attention defaults to a non-deterministic algorithm.", UserWarning, stacklevel=1)
+        warns.during = S.determinism_warnings()
+
+    monkeypatch.setitem(S.STAGES, "condition", warns)
+    S.main(["--root", str(tmp_path / "run"), "--outputs", str(tmp_path / "out"), "--weights", str(tmp_path / "w"), "--stage", "condition"])
+    out = capsys.readouterr().out
+    assert "DETERMINISM WARNING: UserWarning: Memory Efficient attention defaults to a non-deterministic algorithm." in out
+    assert warns.during == ["Memory Efficient attention defaults to a non-deterministic algorithm."]
