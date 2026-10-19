@@ -143,3 +143,29 @@ scored. Nothing here changes the data, the grid configs, the selection tolerance
    directory). If either the ledger, the first report or that marker exists, a new scoring is a "reproduction". Deleting
    `outputs/` therefore no longer makes a second look claim to be the first.
 6. **Probability rows with a negative entry are refused**, in addition to the existing row-sum check, before renormalisation.
+
+## Amendment 2 (2026-10-20), committed alone before the code that implements it
+
+**Why.** The masked determinism check of section 6 failed on the Tesla T4. Two masked hosted runs of the pre-registered grid
+(branch `maskcheck` at `ae8d6ad`, notebook blob `f5f0c1bb`; runs 96m1 and 96m2) printed the same determinism flags
+(`CUBLAS_WORKSPACE_CONFIG=:4096:8`, cudnn deterministic, `use_deterministic_algorithms(True)`, `warn_only` False) and both kept the
+pretrained model with 0 AMP-skipped steps, but their grid hashes differ: `d7ad485b…` vs `577e6953…`. C1's first training loss is
+identical (0.2438) and the second differs (0.3355 vs 0.3351), so the forward pass matched and the first backward/optimizer step
+diverged; C2's validation curve was 0.2875 / 0.338 / 0.3018 vs 0.2865 / 0.3276 / 0.3016. The fresh test was not read in either run.
+
+**Suspected cause (inferred, not confirmed).** tabicl 2.1.1 computes attention with `torch.nn.functional.scaled_dot_product_attention`
+under fp16 autocast. On a T4 (sm75) there is no flash-attention kernel, so PyTorch can choose the memory-efficient kernel, whose
+backward pass is not bitwise deterministic; deterministic mode does not refuse it.
+
+**Change (a pre-registered determinism setting).**
+1. Every model stage (fine-tuning, validation scoring, the fresh test, report, predict, export, reload) runs with the SDPA backend
+   restricted to **MATH** (`torch.nn.attention.sdpa_kernel(SDPBackend.MATH)`) and tabicl's FlashAttention-3 path explicitly off.
+2. The determinism record gains `sdpa_backend` (observed from PyTorch's backend flags, expected `"MATH"`) and `flash_attn3`
+   (expected `false`); both are part of `preregistered`, and `sdpa_backend` is an input of the grid hash.
+3. Python warnings raised during each model stage are captured, and any that mention determinism or a non-deterministic kernel are
+   printed and recorded, so a kernel that only warns cannot pass silently.
+
+**Consequences.** The masked determinism check **restarts**: two new masked hosted T4 runs under this amendment must print identical
+grid hashes before any run may score the fresh test. The failed pair above is history and is not a look. Data, grid configs,
+selection tolerance and reading rule are unchanged. The math backend is slower and uses more memory than the memory-efficient
+kernel; the T4 time estimate is re-measured by the new masked runs.
