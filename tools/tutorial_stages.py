@@ -333,7 +333,7 @@ def stage_data(run: Run) -> None:
     source = opts.get("data_source", DEFAULT_SOURCE)
     use_byod = bool(opts.get("use_byod", False))
     masked = fresh_test_masked()
-    print({"fresh_test_mask": f"{MASK_ENV}=1: the fresh test is not read in this run" if masked else f"{MASK_ENV} unset: the fresh test is read only by the fresh_test stage, only under the pre-registered settings"})
+    print({"fresh_test_mask": f"{MASK_ENV}=1: the fresh test is not read in this run (the pinned archive holding it is still downloaded and digest-checked; test.csv is never extracted)" if masked else f"{MASK_ENV} unset: the fresh test is read only by the fresh_test stage, only under the pre-registered settings"})
     if use_byod and source in SAMPLE_SOURCES:
         raise ValueError('USE_BYOD=True requires DATA_SOURCE = "Upload CSV" or "Upload pre-split train/val/test".')
     if source in UPLOAD_SOURCES and not use_byod:
@@ -561,6 +561,40 @@ def param_delta_l2(a: dict[str, Any], b: dict[str, Any]) -> float:
     return math.sqrt(total)
 
 
+class StepCounter:
+    """Counts optimizer steps instead of computing them (R96 round 2, F2; amendment 1).
+
+    ``attempted`` counts the AMP grad scaler's ``step`` calls (one per training batch); ``taken`` counts the optimizer's own
+    steps through a step-post hook, which the scaler does not reach when it skips an update whose fp16 gradients overflowed.
+    With AMP off (CPU) the scaler is disabled and every attempt is taken."""
+
+    def __init__(self) -> None:
+        self.attempted = 0
+        self.taken = 0
+
+    def on_optimizer_step(self, *args, **kwargs) -> None:
+        self.taken += 1
+
+    def instrument(self, finetuner) -> None:
+        make_amp = finetuner._make_amp
+
+        def counted_make_amp(*args, **kwargs):
+            use_amp, scaler, ctx = make_amp(*args, **kwargs)
+            step = scaler.step
+
+            def counted_step(optimizer, *a, **k):
+                self.attempted += 1
+                return step(optimizer, *a, **k)
+
+            scaler.step = counted_step
+            return use_amp, scaler, ctx
+
+        finetuner._make_amp = counted_make_amp
+
+    def record(self, planned: int) -> dict[str, int]:
+        return {"optimizer_steps_planned": planned, "optimizer_steps_attempted": self.attempted, "optimizer_steps_taken": self.taken, "amp_skipped_steps": self.attempted - self.taken}
+
+
 def run_config(run: Run, P, cfg: dict[str, Any], pipe, enc: dict, train, holdout, *, device: str, seed: int, epochs_cap: int, lr_override: float, base_state: dict) -> dict[str, Any]:
     """One grid config: fine-tune with early stopping on validation log loss, then re-score its best.ckpt at the inference
     ensemble size. Records the validation curve, optimizer steps and whether the weights tabicl kept changed."""
@@ -584,8 +618,16 @@ def run_config(run: Run, P, cfg: dict[str, Any], pipe, enc: dict, train, holdout
         return result
 
     finetuner._validate_current_model = recorded
+    import torch.optim.optimizer as optim_hooks
+
+    counter = StepCounter()
+    counter.instrument(finetuner)
+    hook = optim_hooks.register_optimizer_step_post_hook(counter.on_optimizer_step)
     t0 = time.perf_counter()
-    P.fine_tune_classifier(finetuner, train[enc["features"]], train[enc["target"]], X_val=holdout[enc["features"]], y_val=holdout[enc["target"]], output_dir=str(ft_dir))
+    try:
+        P.fine_tune_classifier(finetuner, train[enc["features"]], train[enc["target"]], X_val=holdout[enc["features"]], y_val=holdout[enc["target"]], output_dir=str(ft_dir))
+    finally:
+        hook.remove()
     seconds = time.perf_counter() - t0
     best = ft_dir / "best.ckpt"
     if not best.exists():
@@ -606,8 +648,8 @@ def run_config(run: Run, P, cfg: dict[str, Any], pipe, enc: dict, train, holdout
         delta_last = param_delta_l2(base_state, model_state(final))
     for checkpoint in epoch_ckpts:
         checkpoint.unlink()  # keep best.ckpt only: TabICL writes one 331 MB checkpoint per epoch
-    record = {"id": cfg["id"], "role": cfg["role"], "learning_rate": lr, "lr_schedule": "constant (no warmup, so no zero-LR step)", "epochs_requested": epochs, "epochs_run": epochs_run, "patience": cfg["patience"], "steps_per_epoch": steps_per_epoch, "optimizer_steps": epochs_run * steps_per_epoch, "nonzero_lr_steps": epochs_run * steps_per_epoch, "baseline_val_log_loss": curve[0] if curve else None, "val_log_loss_per_epoch": curve[1:], "weights_changed": delta_best > 0.0, "param_delta_l2_best": delta_best, "param_delta_l2_last_epoch": delta_last, "candidate_val": candidate_val, "last_epoch_val_exploratory": last_val, "best_ckpt": str(best), "best_ckpt_sha256": sha256_file(best), "seconds": round(seconds, 1), "complete": True}
-    print({"config": cfg["id"], "role": cfg["role"], "lr": lr, "epochs_run": epochs_run, "optimizer_steps": record["optimizer_steps"], "baseline_val_log_loss": rounded(record["baseline_val_log_loss"]), "val_log_loss_per_epoch": rounded(curve[1:]), "weights_changed": record["weights_changed"], "param_delta_l2_best": rounded(delta_best, 6), "param_delta_l2_last_epoch": rounded(delta_last, 6), "candidate_val_log_loss": rounded(candidate_val["log_loss"]), "seconds": record["seconds"]})
+    record = {"id": cfg["id"], "role": cfg["role"], "learning_rate": lr, "lr_schedule": "constant (no warmup, so no zero-LR step)", "epochs_requested": epochs, "epochs_run": epochs_run, "patience": cfg["patience"], "steps_per_epoch": steps_per_epoch, **counter.record(epochs_run * steps_per_epoch), "optimizer_steps": counter.taken, "nonzero_lr_steps": counter.taken, "baseline_val_log_loss": curve[0] if curve else None, "val_log_loss_per_epoch": curve[1:], "weights_changed": delta_best > 0.0, "param_delta_l2_best": delta_best, "param_delta_l2_last_epoch": delta_last, "candidate_val": candidate_val, "last_epoch_val_exploratory": last_val, "best_ckpt": str(best), "best_ckpt_sha256": sha256_file(best), "seconds": round(seconds, 1), "complete": True}
+    print({"config": cfg["id"], "role": cfg["role"], "lr": lr, "epochs_run": epochs_run, "optimizer_steps_attempted": record["optimizer_steps_attempted"], "optimizer_steps_taken": record["optimizer_steps_taken"], "amp_skipped_steps": record["amp_skipped_steps"], "baseline_val_log_loss": rounded(record["baseline_val_log_loss"]), "val_log_loss_per_epoch": rounded(curve[1:]), "weights_changed": record["weights_changed"], "param_delta_l2_best": rounded(delta_best, 6), "param_delta_l2_last_epoch": rounded(delta_last, 6), "candidate_val_log_loss": rounded(candidate_val["log_loss"]), "seconds": record["seconds"]})
     if not record["weights_changed"]:
         print(f"  {cfg['id']}: no epoch beat tabicl's baseline by min_delta {c['min_delta']}, so tabicl restored the pretrained weights and wrote them as best.ckpt (parameter delta 0). The last epoch's weights did move (delta {rounded(delta_last, 6)}); they are only read out on validation below.")
     return record
@@ -617,7 +659,8 @@ def select_config(pretrained_val: dict[str, float], grid: list[dict[str, Any]]) 
     """Pre-registered selection on validation log loss: keep the pretrained model unless a config beats it by more than
     SELECTION_TOLERANCE; ties within SELECTION_TIE go to the config with fewer optimizer steps."""
     reference = pretrained_val["log_loss"]
-    eligible = [g for g in grid if g.get("complete") and g["candidate_val"]["log_loss"] < reference - SELECTION_TOLERANCE]
+    # A restored config (kept weights == pretrained weights) is the pretrained model, never "fine-tuned" (amendment 1).
+    eligible = [g for g in grid if g.get("complete") and g.get("weights_changed") is True and g["candidate_val"]["log_loss"] < reference - SELECTION_TOLERANCE]
     if not eligible:
         return None, f"validation:log_loss; pretrained kept (no config beat {reference:.4f} by more than {SELECTION_TOLERANCE})"
     lowest = min(g["candidate_val"]["log_loss"] for g in eligible)
@@ -799,6 +842,11 @@ def read_ledger(path: Path) -> tuple[list[dict[str, Any]], bool]:
     return [], True
 
 
+def look_marker(run: Run) -> Path:
+    """Marker of a pre-registered look, beside the per-run directories (outside outputs/ and outside any one run)."""
+    return run.root.parent / f"{STEM}_fresh_test_look_{MAGIC_SHA256[:16]}.json"
+
+
 def next_index(folder: Path, kind: str) -> int:
     return len(list(folder.glob(f"{STEM}_fresh_test_{kind}_*.json"))) + 1
 
@@ -841,7 +889,8 @@ def stage_fresh_test(run: Run) -> None:
     ledger_path = fresh / "ledger.json"
     entries, corrupt = read_ledger(ledger_path)
     first_report = fresh / f"{STEM}_fresh_test_report.json"
-    first = RECORDED_EVALUATION is None and not corrupt and not entries and not first_report.exists()
+    marker = look_marker(run)
+    first = RECORDED_EVALUATION is None and not corrupt and not entries and not first_report.exists() and not marker.exists()
     label = TEST_LOOKS[0] if first else TEST_LOOKS[1]
     test = P.read_csv_payload(test_bytes, "test.csv")
     keys = {}
@@ -856,6 +905,8 @@ def stage_fresh_test(run: Run) -> None:
     report = {"test_look": label, "settings_differing": [], "preregistered": True, "recorded_evaluation": RECORDED_EVALUATION, "checks": checks, "selected": {"mode": cond["active_mode"], "selection": cond["selection"]}, "grid_hash": cond["grid_hash"], "device": cond.get("device_name"), "determinism": (cond.get("settings") or {}).get("determinism"), "fresh_test": {"rows": len(y), "member_sha256": MAGIC_MEMBERS["test.csv"], "row_ids_sha256": MAGIC_ROW_IDS_SHA256["test"], "max_probability_row_sum_deviation": deviation}, **reading, "sensitivity_without_duplicated_rows": {"excluded_rows": int(duplicated.sum()), **{k: sensitivity[k] for k in ("n", "primary")}}, "power": "planning estimates: a single accuracy on 1,500 rows about ±0.017 (Wilson); a paired accuracy difference about ±0.011 at 5 % discordance; a paired log-loss difference about ±0.017 (pessimistic proxy)", "validation": validation, "exploratory_readout": cond.get("exploratory_readout"), "notebook_source": json.loads((run.root / "source.json").read_text(encoding="utf-8")) if (run.root / "source.json").is_file() else {}}
     out = first_report if first else fresh / f"{STEM}_fresh_test_reproduction_{next_index(fresh, 'reproduction')}.json"
     atomic_write_json(out, report)  # the look counts from here: the report is written
+    if not marker.exists():  # outside outputs/: deleting outputs/ cannot make a later look claim to be the first
+        atomic_write_json(marker, {"first_look": out.name, "archive_sha256": MAGIC_SHA256, "grid_hash": cond["grid_hash"]})
     entries.append({"file": out.name, "test_look": label, "device": cond.get("device_name"), "grid_hash": cond["grid_hash"], "delta": reading["primary"]["delta"]})
     atomic_write_json(ledger_path, {"entries": entries})
     print({"test_look": label, "written": f"outputs/{FRESH_DIR}/{out.name}", "selected": cond["active_mode"]})

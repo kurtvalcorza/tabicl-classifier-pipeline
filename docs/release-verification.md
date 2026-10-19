@@ -164,11 +164,22 @@ reads nothing.
   and selections (determinism check). If they differ, no run of record is made.
 - **Fresh-test looks so far:** none. No CPU development look was taken: the fixer's CPU checks ran with the fresh test masked.
 
+**Amendment 1 (2026-10-20, committed alone as `5ce528d`):** the epoch estimate is 8 (C1) / 3 (C2, C3) when no epoch improves,
+matching tabicl's patience rule and the CPU development run; optimizer steps are now **counted** (attempted, taken, AMP-skipped) and the
+tie rule uses the taken count; a restored config (`weights_changed: false`) is never selected as fine-tuned; the mask does not stop the
+pinned archive (which also holds `test.csv`) from being downloaded and cached, only from being extracted or read; and a look marker
+outside `outputs/` keeps a later scoring labelled "reproduction" after `outputs/` is deleted.
+
+**Redaction placeholder.** The 2026-10-19 redaction of the two 2026-10-10 exec logs used `<runner>/`; the fleet's shared design names
+`<local-run-dir>/`, which new redactions use. The two committed logs are left as recorded (their before/after hashes are above); the
+unredacted path remains in the repository's earlier history, which is not rewritten.
+
 ### CPU development records (not clean-runtime evidence; fresh test masked)
 
 | Date | Code | What ran | Result |
 |---|---|---|---|
 | 2026-10-19 | uncommitted working tree on `fix/tabicl-tutorial-review-2026-10-17` (after `9fa714a`) | stages data → validate → condition (`cpu_grid=True`, exploratory) → report → fresh_test (masked, then unmasked) → predict → export → reload on CPU, `DIMER_MASK_FRESH_TEST=1` except for the one unmasked `fresh_test` call | pretrained validation log loss 0.2634, accuracy 0.903 (LightGBM 0.3412 / 0.865, random forest 0.3234 / 0.880). C1 (1e-5): 8 epochs, 48 steps, every epoch 0.2712–0.2762 against tabicl's baseline 0.2701, `weights_changed: false`, last-epoch delta 0.415. C2 (5e-5): 3 epochs, 18 steps, 0.2864 / 0.3340 / 0.3027, delta 0.0 kept / 1.171 last. C3 (1e-6): 3 epochs, 18 steps, 0.2702 / 0.2701 / 0.2700, delta 0.0 kept / 0.031 last. Selection: pretrained kept. CPU grid hash `11cb0310…b19d` (a CPU hash; not comparable with T4). The unmasked `fresh_test` call wrote `not scored (exploratory)` with `settings_differing: [cpu_grid, device]` and read nothing. Reload PASS. 0 "y_prob do not sum to one" warnings. |
+| 2026-10-20 | uncommitted working tree after `5ce528d` (round-2 code: counted steps, restored-config rule, look marker) | weights → data → validate → condition (`cpu_grid=True`) → fresh_test, all with `DIMER_MASK_FRESH_TEST=1` | same validation curves and selection as 2026-10-19; **counted** optimizer steps attempted/taken/AMP-skipped: C1 48/48/0, C2 18/18/0, C3 18/18/0 (AMP is off on CPU, so no skips are possible here; the T4 run is where fp16 skips can occur); grid hash `11cb0310…b19d` again (third identical CPU run); fresh test masked, not read. |
 
 ## Current status
 

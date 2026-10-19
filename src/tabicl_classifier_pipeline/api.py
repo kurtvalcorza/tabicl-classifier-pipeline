@@ -122,6 +122,8 @@ def renormalise_probabilities(proba: Any) -> tuple[np.ndarray, float]:
     rather than hidden."""
     values = np.asarray(proba, dtype=float)
     sums = values.sum(axis=1, keepdims=True)
+    if values.size and not float(np.min(values)) >= 0.0:
+        raise RuntimeError(f"class probabilities contain a negative or undefined entry (min = {float(np.min(values)):.3g})")
     deviation = float(np.max(np.abs(sums - 1.0))) if values.size else 0.0
     if not deviation <= MAX_PROBABILITY_ROW_SUM_DEVIATION:
         raise RuntimeError(f"class probabilities do not sum to one (max |row sum - 1| = {deviation:.3g})")

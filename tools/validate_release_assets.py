@@ -98,7 +98,7 @@ NOTEBOOKS = {
             "no CUDA device: the pre-registered grid runs on a GPU runtime",
             "finetuner = P.create_finetuned_classifier(",
             'P.fine_tune_classifier(finetuner, train[enc["features"]], train[enc["target"]], X_val=holdout[enc["features"]], y_val=holdout[enc["target"]], output_dir=str(ft_dir))',
-            'eligible = [g for g in grid if g.get("complete") and g["candidate_val"]["log_loss"] < reference - SELECTION_TOLERANCE]',
+            'eligible = [g for g in grid if g.get("complete") and g.get("weights_changed") is True and g["candidate_val"]["log_loss"] < reference - SELECTION_TOLERANCE]',
             "torch.use_deterministic_algorithms(True)",
             "def stage_fresh_test(run: Run) -> None:",
             "differing = settings_differing(cond.get(\"settings\") or {})",

@@ -16,7 +16,7 @@ _spec = importlib.util.spec_from_file_location("_e2e_notebook_template", Path(__
 assert _spec and _spec.loader
 _e2e_module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_e2e_module)
-BADGES, REPO, ENVIRONMENT, RUNTIME_PREREQ = _e2e_module.BADGES, _e2e_module.REPO, _e2e_module.ENVIRONMENT, _e2e_module.RUNTIME_PREREQ
+BADGES, REPO, ENVIRONMENT, RUNTIME_PREREQ = _e2e_module.BADGES, _e2e_module.REPO, _e2e_module.ENVIRONMENT, _e2e_module.COMPANION_RUNTIME_PREREQ
 SAMPLE = json.loads((Path(__file__).resolve().parents[1] / "examples" / "sample-bundle" / "SAMPLE_BUNDLE.json").read_text(encoding="utf-8"))
 
 TEMPLATE = {

@@ -209,11 +209,11 @@ def test_reading_rule_verdicts() -> None:
 
 def test_selection_keeps_pretrained_unless_beaten_by_the_tolerance() -> None:
     pre = {"log_loss": 0.2634}
-    grid = [{"id": "C1", "complete": True, "optimizer_steps": 48, "candidate_val": {"log_loss": 0.2600}}, {"id": "C2", "complete": True, "optimizer_steps": 18, "candidate_val": {"log_loss": 0.2634}}]
+    grid = [{"id": "C1", "complete": True, "weights_changed": True, "optimizer_steps": 48, "candidate_val": {"log_loss": 0.2600}}, {"id": "C2", "complete": True, "weights_changed": True, "optimizer_steps": 18, "candidate_val": {"log_loss": 0.2634}}]
     assert S.select_config(pre, grid)[0] is None  # 0.0034 < 0.005
     grid[0]["candidate_val"]["log_loss"] = 0.2500
     assert S.select_config(pre, grid)[0]["id"] == "C1"
-    grid.append({"id": "C3", "complete": True, "optimizer_steps": 6, "candidate_val": {"log_loss": 0.25005}})
+    grid.append({"id": "C3", "complete": True, "weights_changed": True, "optimizer_steps": 6, "candidate_val": {"log_loss": 0.25005}})
     assert S.select_config(pre, grid)[0]["id"] == "C3"  # tie within 1e-4 goes to fewer steps
 
 
@@ -342,3 +342,80 @@ def test_stamp_names_a_commit_that_contains_every_carried_file() -> None:
     for dest, path in sources.items():
         blob = subprocess.run(["git", "show", f"{revision}:{path}"], cwd=ROOT, check=True, capture_output=True).stdout
         assert hashlib.sha256(blob.replace(b"\r\n", b"\n")).hexdigest() == meta["files"][dest], (dest, path, revision)
+
+
+# ---------------------------------------------------------------- round 2 (peer review F1-F6; amendment 1)
+
+
+def test_F5_a_restored_config_is_never_selected_as_fine_tuned() -> None:
+    pre = {"log_loss": 0.2634}
+    restored = {"id": "C1", "complete": True, "weights_changed": False, "optimizer_steps": 48, "candidate_val": {"log_loss": 0.2570}}
+    chosen, basis = S.select_config(pre, [restored])
+    assert chosen is None and "pretrained kept" in basis
+
+
+class _Optimizer:
+    def __init__(self, counter):
+        self.counter = counter
+
+    def step(self):
+        self.counter.on_optimizer_step(self)  # what the global step-post hook does after a real step
+
+
+class _Scaler:
+    """GradScaler stand-in: skips optimizer.step() when the scaled gradients overflowed (inf/NaN)."""
+
+    def __init__(self, overflow_on):
+        self.overflow_on, self.calls = set(overflow_on), 0
+
+    def step(self, optimizer):
+        self.calls += 1
+        if self.calls not in self.overflow_on:
+            optimizer.step()
+
+
+def test_F2_steps_are_counted_and_a_skipped_amp_step_is_reported() -> None:
+    counter = S.StepCounter()
+    scaler = _Scaler(overflow_on={1, 4})
+    finetuner = type("F", (), {})()
+    finetuner._make_amp = lambda device: (True, scaler, None)
+    counter.instrument(finetuner)
+    _, wrapped, _ = finetuner._make_amp("cuda")
+    optimizer = _Optimizer(counter)
+    for _ in range(6):
+        wrapped.step(optimizer)
+    assert counter.record(planned=6) == {"optimizer_steps_planned": 6, "optimizer_steps_attempted": 6, "optimizer_steps_taken": 4, "amp_skipped_steps": 2}
+    body = (ROOT / "tools" / "tutorial_stages.py").read_text(encoding="utf-8")
+    assert '"optimizer_steps": counter.taken' in body and "register_optimizer_step_post_hook(counter.on_optimizer_step)" in body
+    assert 'key=lambda g: (g["optimizer_steps"], g["candidate_val"]["log_loss"])' in body  # tie rule uses the taken count
+
+
+def test_F3_deleting_outputs_does_not_reset_the_first_look(tmp_path, scored) -> None:
+    run = _setup(tmp_path)
+    _quiet(S.stage_fresh_test, run)
+    assert (_fresh(run) / f"{S.STEM}_fresh_test_report.json").exists() and S.look_marker(run).exists()
+    shutil.rmtree(run.out)
+    _quiet(S.stage_fresh_test, run)
+    assert not (_fresh(run) / f"{S.STEM}_fresh_test_report.json").exists()
+    assert json.loads((_fresh(run) / f"{S.STEM}_fresh_test_reproduction_1.json").read_text(encoding="utf-8"))["test_look"] == REPRO
+
+
+def test_F6_negative_probability_entries_are_refused() -> None:
+    import tabicl_classifier_pipeline as P
+
+    with pytest.raises(RuntimeError, match="negative or undefined"):
+        P.renormalise_probabilities([[1.5, -0.5]])
+    with pytest.raises(RuntimeError):
+        P.renormalise_probabilities([[float("nan"), 1.0]])
+
+
+def test_F1_quoted_grid_numbers_come_from_the_committed_cpu_record() -> None:
+    nb = json.loads(E2E.read_text(encoding="utf-8"))
+    text = "\n".join("".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "markdown")
+    record = (ROOT / "docs" / "release-verification.md").read_text(encoding="utf-8")
+    row = next(line for line in record.splitlines() if line.startswith("| 2026-10-19 |") and "11cb0310" in line)
+    for number in ("0.2634", "0.903", "0.2701", "0.2712–0.2762", "0.2864 / 0.3340 / 0.3027", "0.2702 / 0.2701 / 0.2700"):
+        assert number in text and number in row, number
+    assert "0.29–0.36" not in text and "every epoch *worse*" not in text and "every epoch scored worse" not in text
+    assert "11cb0310" in text and "CPU development run" in text
+    assert "suppose a config reports `weights_changed: False`" in text and "`weights_changed: True`" in text  # conditional, both outcomes

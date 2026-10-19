@@ -58,6 +58,10 @@ RUNTIME_PREREQ = (
     "- **Runtime:** a fresh **Linux x86_64** runtime — Google Colab with a **T4 GPU** is the documented runtime (the pre-registered fine-tuning grid needs CUDA, and only a Tesla T4 run scores the fresh test); Kaggle or a Linux Jupyter kernel also work, and a CPU-only runtime runs everything except the grid, which it skips with a printed note (that run is exploratory). The kernel's own Python version does not matter: the notebook installs nothing into it, and runs every stage with CPython 3.12.12 in an isolated environment built from {n_locked} hash-locked packages (`tabicl` 2.1.1 with its fine-tuning extras, `torch` 2.14.0 with its CUDA libraries, `numpy` 2.5.2, `pandas` 3.0.5, `scikit-learn` 1.9.0, `lightgbm` 4.7.0). About 0.2 GB of disk is needed for the checkpoint and about 8 GB for the isolated environment."
 )
 
+COMPANION_RUNTIME_PREREQ = (
+    "- **Runtime:** a fresh **Linux x86_64** runtime — Google Colab, Kaggle or a Linux Jupyter kernel; a GPU is optional (the companion only conditions and predicts, it never fine-tunes). The kernel's own Python version does not matter: the notebook installs nothing into it, and runs every stage with CPython 3.12.12 in an isolated environment built from {n_locked} hash-locked packages (`tabicl` 2.1.1, `torch` 2.14.0 with its CUDA libraries, `numpy` 2.5.2, `pandas` 3.0.5, `scikit-learn` 1.9.0, `lightgbm` 4.7.0). About 0.2 GB of disk is needed for the checkpoint and about 8 GB for the isolated environment. Class probabilities are renormalised row-wise after their deviation from 1 is checked (a rounding-level correction)."
+)
+
 TEMPLATE = {
     **ENVIRONMENT,
     "stem": "tabiclv2_classifier",
@@ -402,22 +406,31 @@ TEMPLATE = {
         {
             "md": (
                 "**What to notice:** `preregistered` and `settings_differing` at the top; the pretrained validation metrics; for "
-                "each config its `val_log_loss_per_epoch` against `baseline_val_log_loss`, `optimizer_steps`, `weights_changed` and "
+                "each config its `val_log_loss_per_epoch` against `baseline_val_log_loss`, the optimizer steps it attempted, took and "
+                "skipped (`optimizer_steps_attempted` / `optimizer_steps_taken` / `amp_skipped_steps`; fp16 on the GPU can skip a step "
+                "whose gradients overflow), `weights_changed` and "
                 "the two parameter deltas; `recommended_for_export` with its `selection_basis`; the `exploratory_readout`; and the "
                 "grid hash. On a CPU runtime: `fine_tune.skipped` with the reason.\n\n"
-                "For orientation only: in a CPU development check of this split (2026-10-19, uncommitted working tree, validation "
-                "only, not a recorded run of this notebook), the pretrained model scored validation log loss 0.2634 and accuracy "
-                "0.903, and three short fine-tunes made every epoch *worse* than tabicl's baseline (validation log loss 0.29–0.36 "
-                "against 0.270), so tabicl restored the pretrained weights each time. Read your own run's numbers, not these.\n\n"
-                "**Checkpoint:** every config reports `weights_changed: False`, yet the last-epoch parameter delta is not 0. What "
-                "happened, and is it a failure of the notebook?\n\n"
+                "For orientation only — the **CPU development run** of this exact grid (2026-10-19, CPU, validation only, fresh "
+                "test masked, grid hash `11cb0310…`; recorded in `docs/release-verification.md`, not a run of this notebook on a "
+                "T4): the pretrained model scored validation log loss 0.2634 and accuracy 0.903; against tabicl's baseline of 0.2701 "
+                "(measured with 2 ensemble members), C1 ran 8 epochs at 0.2712–0.2762, C2 ran 3 epochs at 0.2864 / 0.3340 / 0.3027, "
+                "and C3 ran 3 epochs at 0.2702 / 0.2701 / 0.2700 — within ±0.0001 of the baseline. **No epoch beat the baseline by "
+                "more than tabicl's `min_delta` (1e-4)**, so tabicl kept the pretrained weights in every config, and no config "
+                "beat the pretrained model by the pre-registered 0.005 tolerance. A T4 run can differ; read your own run's numbers.\n\n"
+                "**Checkpoint:** suppose a config reports `weights_changed: False` while its last-epoch parameter delta is not 0. "
+                "What happened? And what would it mean if a config instead reported `weights_changed: True`?\n\n"
                 "<details>\n<summary>Check your reasoning (open after answering)</summary>\n\n"
-                "The gradient steps did change the weights — the last-epoch delta shows it — but every changed state scored worse "
-                "on validation than the pretrained weights, so tabicl's early stopping restored the pretrained state and wrote it as "
-                "`best.ckpt`. That is the procedure working as designed, not a bug: selection on held-out data protects you from "
-                "keeping an adaptation that hurts. The lesson is that a strong in-context model leaves little for fine-tuning to "
-                "add on a few thousand rows; a null result here is a finding, reported as one. The validation partition chose; the "
-                "fresh test, untouched by that choice, says how the chosen model does on new data.\n\n"
+                "`weights_changed: False` with a non-zero last-epoch delta: the gradient steps did move the weights, but no epoch's "
+                "weights beat the validation baseline by more than `min_delta` — some were worse, some (like C3 in the CPU "
+                "development run) were within a ten-thousandth of it — so tabicl's early stopping restored the pretrained state and "
+                "wrote it as `best.ckpt`. That is the procedure working as designed: selection on held-out data keeps an adaptation "
+                "only when it measurably helps. A restored config can never be selected as \"fine-tuned\".\n\n"
+                "`weights_changed: True`: some epoch did beat the baseline by more than `min_delta`, and tabicl kept those weights. "
+                "That is still not enough to be selected: the config must also beat the pretrained model's validation log loss by "
+                "more than 0.005. Either way the validation partition chose, and the fresh test, untouched by that choice, says how "
+                "the chosen model does on new data. A strong in-context model often leaves little for fine-tuning to add on a few "
+                "thousand rows; a null result is a finding, reported as one.\n\n"
                 "</details>"
             ),
         },
@@ -475,7 +488,9 @@ TEMPLATE = {
                 "`_reproduction_<n>` and is labelled **\"reproduction\"**. A runtime cannot know about other runtimes: "
                 "`docs/release-verification.md` names the run of record and its reproductions. Set the environment variable "
                 "`DIMER_MASK_FRESH_TEST=1` (for example `%env DIMER_MASK_FRESH_TEST=1`) to skip the fresh test entirely; it is "
-                "re-read on every stage call.\n\n"
+                "re-read on every stage call. The mask stops the fresh test from being read, not from being downloaded: the pinned "
+                "archive holds all three CSVs, so the data stage still fetches and caches it (digest-checked), but `test.csv` is "
+                "never extracted, parsed or scored under the mask.\n\n"
                 "**Predict before running:** if Section 6 kept the pretrained model, what will Δ and its interval be?"
             ),
             "code": "run_stage('fresh_test')",
@@ -645,11 +660,13 @@ TEMPLATE = {
         "3. **Fresh test:** the primary endpoint with its interval and verdict, and its `test_look`.\n"
         "4. **Reuse and limits:** what the Section 9 reload proved, and the one limitation you would fix first.\n\n"
         "<details>\n<summary>Sample conclusion (open after writing yours)</summary>\n\n"
-        "A sample of the reasoning, with the numbers left to your run: on MAGIC's 1,000 validation rows the pretrained TabICLv2 "
-        "model already beat LightGBM and the random forest on log loss. None of the three pre-registered fine-tuning configs "
-        "beat it by the 0.005 tolerance — every epoch scored worse than tabicl's baseline, tabicl restored the pretrained weights "
-        "(parameter delta 0), and the pretrained model was kept. The fresh test therefore reports \"same model (Δ = 0)\": there "
-        "was nothing to compare, which is itself the finding that fine-tuning this in-context model on 3,000 rows did not help. "
+        "A sample of the reasoning, written for the case your run is most likely to show (the CPU development run did); "
+        "replace it with your own numbers: on MAGIC's 1,000 validation rows the pretrained TabICLv2 model already beat LightGBM "
+        "and the random forest on log loss. If no epoch of any config beat tabicl's baseline by more than `min_delta`, tabicl "
+        "restored the pretrained weights (parameter delta 0), no config beat the pretrained model by the 0.005 tolerance, and "
+        "the pretrained model was kept: the fresh test then reports \"same model (Δ = 0)\" — nothing to compare, which is "
+        "itself the finding that fine-tuning this in-context model on 3,000 rows did not help. If instead a config was "
+        "selected, report the fresh-test Δ with its interval and verdict, and say whether the interval excludes 0. "
         "The bundle rebuilt an identical classifier in a fresh process. Before deployment I would evaluate on a "
         "domain-representative table and calibrate the probabilities.\n\n"
         "</details>\n\n"
