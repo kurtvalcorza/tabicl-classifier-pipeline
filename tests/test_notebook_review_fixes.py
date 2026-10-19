@@ -376,8 +376,8 @@ def test_M1_sample_bundle_is_reproduced_byte_for_byte() -> None:
 
 
 def test_M1_sample_rows_are_the_e2e_new_rows(tmp_path) -> None:
-    """TICA-M1 / TIC-S2: the carried rows are the E2E notebook's first eight holdout rows, which the support set does not contain."""
-    run = _run(tmp_path / "run", tmp_path / "outputs")
+    """TICA-M1 / TIC-S2: the carried rows are the E2E notebook's first eight holdout rows of the Breast Cancer source (the earlier default, which the pinned sample bundle carries), which the support set does not contain."""
+    run = _run(tmp_path / "run", tmp_path / "outputs", {"data_source": "Sample: Breast Cancer"})
     _quiet(STAGES.stage_data, run)
     _quiet(STAGES.stage_validate, run)
     enc = run.read_state("encoded.json", "t")
