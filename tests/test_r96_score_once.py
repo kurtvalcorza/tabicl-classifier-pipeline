@@ -320,7 +320,12 @@ def test_notebook_text_is_labelled_and_current() -> None:
     for quoted in ("0.9825", "0.9649", "0.9561", "0.2634"):  # R96-m2: every quoted number carries its run label
         for match in re.finditer(re.escape(quoted), text):
             window = text[max(0, match.start() - 400): match.end() + 200]
-            assert "2026-10-10" in window or "2026-10-19" in window, quoted
+            assert "2026-10-10" in window or "2026-10-19" in window or "2026-10-20" in window, quoted
+    for quoted in ("0.2628", "0.8993", "0.8831", "0.0006"):  # the hosted run of record's numbers carry its date
+        assert quoted in text, quoted
+        for match in re.finditer(re.escape(quoted), text):
+            assert "2026-10-20" in text[max(0, match.start() - 600): match.end() + 200], quoted
+    assert "CPU development run" in text and "hosted run of record" in text  # the two runs stay distinct
     assert "fine-tuning a strong in-context model often does not help" in text.lower()
     assert "[1] J. Qu et al." in text and "doi: 10.24432/C52C8B" in text  # IEEE-style references (s1)
 
