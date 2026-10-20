@@ -1170,6 +1170,30 @@ def build_manifest(P, *, enc: dict, classes: list, mode: str, selection: str, me
     }
 
 
+ZIP_DATE_TIME = (1980, 1, 1, 0, 0, 0)  # the earliest ZIP timestamp; fixed so equal members give an equal ZIP digest
+
+
+def deterministic_zip(root: Path, archive: Path) -> Path:
+    """Write every file under ``root`` to ``archive`` in sorted order with a fixed timestamp and mode, atomically.
+
+    ``shutil.make_archive`` stamps members with their file-system mtimes, so two runs that write identical members still
+    print different ZIP digests. Here the digest depends only on the member names and bytes.
+    """
+    import zipfile
+
+    files = sorted(p for p in root.rglob("*") if p.is_file())
+    tmp = archive.with_name(archive.name + ".tmp")
+    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in files:
+            info = zipfile.ZipInfo(path.relative_to(root).as_posix(), date_time=ZIP_DATE_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            with path.open("rb") as source, zf.open(info, "w", force_zip64=True) as target:
+                shutil.copyfileobj(source, target, 1024 * 1024)
+    os.replace(tmp, archive)
+    return archive
+
+
 def stage_export(run: Run) -> None:
     import importlib.metadata
     import platform
@@ -1195,7 +1219,7 @@ def stage_export(run: Run) -> None:
     metrics = {"selectionMetric": cond["eval_metric"], "pretrainedHoldout": cond["pretrained_holdout"], "fineTunedHoldout": cond["candidate_holdout"], "pretrainedIndependentTest": cond["pretrained_test"], "fineTunedIndependentTest": cond["candidate_test"]}
     manifest = build_manifest(P, enc=enc, classes=classes, mode=cond["active_mode"], selection=cond["selection"], metrics=metrics, n_estimators=model.n_estimators, checkpoint=ckpt, context=context, runtime=runtime, source=source)
     (art / "artifact.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    archive = Path(shutil.make_archive(str(run.out / f"{STEM}_artifact"), "zip", root_dir=art))
+    archive = deterministic_zip(art, run.out / f"{STEM}_artifact.zip")
     smoke = holdout[enc["features"]].iloc[: min(NEW_ROWS, len(holdout))]
     run.write_state("export_reference.json", {"labels": [str(x) for x in model.predict(smoke)], "proba": numpy.asarray(model.predict_proba(smoke)).tolist(), "classes": [str(c) for c in classes], "device": model.device})
     digest = sha256_file(archive)

@@ -516,3 +516,27 @@ def test_A2_a_determinism_warning_is_surfaced(tmp_path, fake_torch, monkeypatch,
     out = capsys.readouterr().out
     assert "DETERMINISM WARNING: UserWarning: Memory Efficient attention defaults to a non-deterministic algorithm." in out
     assert warns.during == ["Memory Efficient attention defaults to a non-deterministic algorithm."]
+
+
+# ---------------------------------------------------------------- deterministic artifact ZIP (2026-10-20 record finding)
+
+
+def test_the_artifact_zip_digest_depends_only_on_member_names_and_bytes(tmp_path) -> None:
+    import os
+    import zipfile
+
+    digests = []
+    for i, mtime in enumerate((1_000_000_000, 1_700_000_000)):
+        art = tmp_path / f"art{i}"
+        (art / "checkpoints").mkdir(parents=True)
+        files = {"artifact.json": b"{}", "training_context.parquet": b"ctx", "checkpoints/best.ckpt": b"w" * 4096}
+        for name, data in (files.items() if i == 0 else reversed(list(files.items()))):
+            (art / name).write_bytes(data)
+            os.utime(art / name, (mtime, mtime))
+        archive = S.deterministic_zip(art, tmp_path / f"a{i}.zip")
+        digests.append(hashlib.sha256(archive.read_bytes()).hexdigest())
+        with zipfile.ZipFile(archive) as zf:
+            assert zf.namelist() == sorted(files) and all(info.date_time == S.ZIP_DATE_TIME for info in zf.infolist())
+    assert digests[0] == digests[1]
+    body = (ROOT / "tools" / "tutorial_stages.py").read_text(encoding="utf-8")
+    assert "make_archive(" not in body
