@@ -1,0 +1,365 @@
+[colab-suite 22:01:04] tabicl-classifier-pipeline@ae8d6ad tutorials/tabiclv2_classifier_colab.ipynb: blob f5f0c1bb8b38faf0bb9be0cd0a58cab871a4029a
+[colab-suite 22:01:04] $ colab sessions
+[colab-suite 22:01:05] $ colab new -s suite-tabicl-ae8d6ad-8467 --gpu T4
+[colab] Creating session 'suite-tabicl-ae8d6ad-8467'...
+[colab] Session READY.
+[colab-suite 22:01:09] $ colab status -s suite-tabicl-ae8d6ad-8467
+[suite-tabicl-ae8d6ad-8467] gpu-t4-s-kkb-euw4c1-122wf82a8dzf8 | Hardware: T4 | Shape: Standard | Variant: GPU | Status: IDLE
+[colab-suite 22:01:11] $ colab exec -s suite-tabicl-ae8d6ad-8467 -f <local-run-dir>/tabiclv2_classifier_colab_ae8d6ad_colab-cli-t4.ipynb --timeout 3600.0
+[colab] Parsing notebook '<local-run-dir>/tabiclv2_classifier_colab_ae8d6ad_colab-cli-t4.ipynb'...
+[colab] Executing cell 1/13 - maskcheck-00...
+{'DIMER_MASK_FRESH_TEST': '1'}
+[colab] Executing cell 2/13 - Infrastructure: check the runtime, accelerator and disk; create (or keep) the run directory...
+{'accelerator': 'Tesla T4, 15360 MiB', 'kernel_python': '3.13.15', 'run_directory': '/content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf', 'outputs': '/content/outputs', 'weights': '/content/weights', 'environment_root': '/tmp/dimer_uv', 'free_gib': {'weights': 193.3, 'environment': 193.3}}
+[colab] Executing cell 3/13 - Infrastructure: write and verify the carried package, stage runner, lock, manifest and samples...
+{'carried_files': 8, 'verified': True, 'repository': 'kurtvalcorza/tabicl-classifier-pipeline', 'revision': '589a81d81cd4699c5a75d3cf453e2d1ebc895126', 'generator': 'build_notebook.py/3.0-tabular'}
+[colab] Executing cell 4/13 - Infrastructure: build (or reuse) the isolated locked environment and define the stage runner...
+{'notebook_source': '589a81d81cd4699c5a75d3cf453e2d1ebc895126', 'python': '3.12.12', 'torch': '2.14.0', 'tabicl': '2.1.1', 'numpy': '2.5.2', 'pandas': '3.0.5', 'scikit-learn': '1.9.0', 'lightgbm': '4.7.0', 'cuda': True, 'locked_packages': 90, 'environment': '/tmp/dimer_uv/venv-c364e6a779ced5aa', 'environment_reused': False, 'setup_seconds': 63}
+[colab] Executing cell 5/13 - Infrastructure: stage and digest-verify the pinned checkpoint...
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'weights' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/weights.log
+{'model_id': 'jingang/TabICL', 'revision': '4dcd344ece2c00be9e831fdd35bed57b5ad83e19', 'license': 'bsd-3-clause', 'files': 1, 'total_bytes': 110368038}
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+{'weights_dir': '/content/weights/tabicl-classifier-v2', 'fetched': ['tabicl-classifier-v2-20260212.ckpt']}
+{'verified_files': 1, 'revision': '4dcd344ece2c00be9e831fdd35bed57b5ad83e19', 'sha256': ['bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0']}
+[colab] Executing cell 6/13 - tabiclv2_classifier-15...
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'data' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/data.log
+{'fresh_test_mask': 'DIMER_MASK_FRESH_TEST=1: the fresh test is not read in this run (the pinned archive holding it is still downloaded and digest-checked; test.csv is never extracted)'}
+{'sample_kind': 'sample', 'name': 'uci-159-magic-gamma-telescope', 'source': 'Sample: MAGIC Gamma Telescope', 'target': 'target', 'train_rows': 3000, 'holdout_rows': 1000, 'test_rows': 0, 'csv_sha256': '6eaf0cf1253540cb59c31dc5439838651b142695818709828beed79104c9e1c5', 'dropped_missing_target_rows_before_split': {}, 'text_columns': [], 'use_byod': False, 'archive_sha256': '2c6108e6d3e53cd9fcc8417df6cc8018ea2faa70a3e9b8e58fd3ef4e1463497d', 'source_sha256': 'a52d3a378e43df7b678c4c0b2f03a66a058bbfeb27c95ccd037a767e7d172984', 'row_ids_sha256': {'train': '009082b81a485027433be0fcb0de99855a480b425ebbb9e70bd37242307210cd', 'val': '22dbeb1022a76e2cab51dd7a2df9869efa71430867d975f21ac59369e84d17b3', 'test': '8847cab4e87c8ff30dd6a27045464f7891b2e14dd39149c5e5648348f190f3e4', 'reserve': 'c1b30483d5024fa6f94893a824dcbacf60ca942b941faa790edbb541c97208b3'}, 'holdout_role': 'validation (1,000 rows): grid selection and early stopping', 'test_role': 'fresh test (1,500 rows): not loaded here; read only by the fresh_test stage under the pre-registered settings', 'fresh_test_rows': 1500, 'fresh_test_member_sha256': '62c3eff6bb323ac150ec60eb4f26d5ed92ce20fe79ed3baa83f32b76e4482b51', 'reserve_rows': 13520}
+[colab] Executing cell 7/13 - tabiclv2_classifier-18...
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'validate' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/validate.log
+{'ceilings': {'MIN_TRAIN_ROWS': 50, 'MIN_EVAL_ROWS': 2, 'MAX_TRAIN_ROWS': 50000, 'MAX_FEATURES': 2000, 'MIN_CLASSES': 2, 'MIN_ROWS_PER_CLASS': 2}, 'decision_rule': 'argmax'}
+{
+  "id": "uci-159-magic-gamma-telescope:train",
+  "mode": "fit",
+  "rows": 3000,
+  "dropped_missing_target_rows": 0,
+  "feature_columns": [
+    "fLength",
+    "fWidth",
+    "fSize",
+    "fConc",
+    "fConc1",
+    "fAsym",
+    "fM3Long",
+    "fM3Trans",
+    "fAlpha",
+    "fDist"
+  ],
+  "categorical_columns": [],
+  "missing_value_columns": {},
+  "classes": [
+    "g",
+    "h"
+  ],
+  "class_counts": {
+    "g": 1945,
+    "h": 1055
+  },
+  "majority_class_share": 0.6483333333333333
+}
+findings: [{'input': 'too-few-rows-probe', 'verdict': 'rejected', 'message': 'need at least 50 labelled rows, got 49'}]
+{'dropped_missing_target_rows': {'train': 0, 'holdout': 0, 'test': 0}, 'unseen_categorical_values': {'holdout': {}, 'test': {}}, 'encoded_categoricals': []}
+{'train': 3000, 'holdout': 1000, 'test': 0, 'features': 10, 'classes': ['g', 'h'], 'training_class_shares': {'g': 0.648, 'h': 0.352}}
+majority-class baseline on the holdout {'accuracy': 0.648, 'balanced_accuracy': 0.5, 'f1_weighted': 0.5096, 'log_loss': 0.6487, 'roc_auc': nan}
+[colab] Executing cell 8/13 - tabiclv2_classifier-21...
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'condition' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/condition.log
+{'device': 'Tesla T4', 'determinism': {'CUBLAS_WORKSPACE_CONFIG': ':4096:8', 'cudnn_deterministic': True, 'cudnn_benchmark': False, 'deterministic_algorithms': True, 'warn_only': False, 'seed': 42}, 'preregistered': True, 'settings_differing': []}
+pretrained validation {'accuracy': 0.903, 'balanced_accuracy': 0.8804, 'f1_weighted': 0.9015, 'log_loss': 0.2633, 'roc_auc': 0.9464}
+Baseline val log_loss: -0.2701
+Fine-tune:   0%|          | 0/30 [00:00<?, ?it/s]
+  epoch 1/30:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 1/30:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.2438, lr=1.00e-05][A
+  epoch 1/30:  17%|█▋        | 1/6 [00:00<00:03,  1.45it/s, loss=0.2438, lr=1.00e-05][A
+  epoch 1/30:  17%|█▋        | 1/6 [00:00<00:03,  1.45it/s, loss=0.3351, lr=1.00e-05][A
+  epoch 1/30:  33%|███▎      | 2/6 [00:00<00:01,  2.28it/s, loss=0.3351, lr=1.00e-05][A
+  epoch 1/30:  33%|███▎      | 2/6 [00:01<00:01,  2.28it/s, loss=0.2829, lr=1.00e-05][A
+  epoch 1/30:  50%|█████     | 3/6 [00:01<00:01,  2.75it/s, loss=0.2829, lr=1.00e-05][A
+  epoch 1/30:  50%|█████     | 3/6 [00:01<00:01,  2.75it/s, loss=0.4609, lr=1.00e-05][A
+  epoch 1/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.09it/s, loss=0.4609, lr=1.00e-05][A
+  epoch 1/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.09it/s, loss=0.2336, lr=1.00e-05][A
+  epoch 1/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.35it/s, loss=0.2336, lr=1.00e-05][A
+  epoch 1/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.35it/s, loss=0.3157, lr=1.00e-05][A
+  epoch 1/30: 100%|██████████| 6/6 [00:01<00:00,  3.59it/s, loss=0.3157, lr=1.00e-05][A
+                                                                                     [A
+Fine-tune:   0%|          | 0/30 [00:02<?, ?it/s, train_loss=0.3120, val_log_loss=-0.2734, best=-0.2701, s/epoch=2.0]
+Fine-tune:   3%|▎         | 1/30 [00:03<01:31,  3.17s/it, train_loss=0.3120, val_log_loss=-0.2734, best=-0.2701, s/epoch=2.0]
+  epoch 2/30:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 2/30:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.3789, lr=1.00e-05][A
+  epoch 2/30:  17%|█▋        | 1/6 [00:00<00:01,  3.14it/s, loss=0.3789, lr=1.00e-05][A
+  epoch 2/30:  17%|█▋        | 1/6 [00:00<00:01,  3.14it/s, loss=0.2387, lr=1.00e-05][A
+  epoch 2/30:  33%|███▎      | 2/6 [00:00<00:01,  3.30it/s, loss=0.2387, lr=1.00e-05][A
+  epoch 2/30:  33%|███▎      | 2/6 [00:00<00:01,  3.30it/s, loss=0.2532, lr=1.00e-05][A
+  epoch 2/30:  50%|█████     | 3/6 [00:00<00:00,  3.36it/s, loss=0.2532, lr=1.00e-05][A
+  epoch 2/30:  50%|█████     | 3/6 [00:01<00:00,  3.36it/s, loss=0.2624, lr=1.00e-05][A
+  epoch 2/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.24it/s, loss=0.2624, lr=1.00e-05][A
+  epoch 2/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.24it/s, loss=0.3198, lr=1.00e-05][A
+  epoch 2/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.40it/s, loss=0.3198, lr=1.00e-05][A
+  epoch 2/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.40it/s, loss=0.3981, lr=1.00e-05][A
+  epoch 2/30: 100%|██████████| 6/6 [00:01<00:00,  3.59it/s, loss=0.3981, lr=1.00e-05][A
+                                                                                     [A
+Fine-tune:   3%|▎         | 1/30 [00:05<01:31,  3.17s/it, train_loss=0.3085, val_log_loss=-0.2758, best=-0.2701, s/epoch=1.7]
+Fine-tune:   7%|▋         | 2/30 [00:09<02:21,  5.06s/it, train_loss=0.3085, val_log_loss=-0.2758, best=-0.2701, s/epoch=1.7]
+  epoch 3/30:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 3/30:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.3422, lr=1.00e-05][A
+  epoch 3/30:  17%|█▋        | 1/6 [00:00<00:01,  3.23it/s, loss=0.3422, lr=1.00e-05][A
+  epoch 3/30:  17%|█▋        | 1/6 [00:00<00:01,  3.23it/s, loss=0.3824, lr=1.00e-05][A
+  epoch 3/30:  33%|███▎      | 2/6 [00:00<00:01,  3.52it/s, loss=0.3824, lr=1.00e-05][A
+  epoch 3/30:  33%|███▎      | 2/6 [00:00<00:01,  3.52it/s, loss=0.2576, lr=1.00e-05][A
+  epoch 3/30:  50%|█████     | 3/6 [00:00<00:00,  3.71it/s, loss=0.2576, lr=1.00e-05][A
+  epoch 3/30:  50%|█████     | 3/6 [00:01<00:00,  3.71it/s, loss=0.3015, lr=1.00e-05][A
+  epoch 3/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.63it/s, loss=0.3015, lr=1.00e-05][A
+  epoch 3/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.63it/s, loss=0.2606, lr=1.00e-05][A
+  epoch 3/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.77it/s, loss=0.2606, lr=1.00e-05][A
+  epoch 3/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.77it/s, loss=0.3707, lr=1.00e-05][A
+  epoch 3/30: 100%|██████████| 6/6 [00:01<00:00,  3.86it/s, loss=0.3707, lr=1.00e-05][A
+                                                                                     [A
+Fine-tune:   7%|▋         | 2/30 [00:11<02:21,  5.06s/it, train_loss=0.3192, val_log_loss=-0.2755, best=-0.2701, s/epoch=1.6]
+Fine-tune:  10%|█         | 3/30 [00:12<01:49,  4.06s/it, train_loss=0.3192, val_log_loss=-0.2755, best=-0.2701, s/epoch=1.6]
+  epoch 4/30:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 4/30:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.4103, lr=1.00e-05][A
+  epoch 4/30:  17%|█▋        | 1/6 [00:00<00:01,  3.12it/s, loss=0.4103, lr=1.00e-05][A
+  epoch 4/30:  17%|█▋        | 1/6 [00:00<00:01,  3.12it/s, loss=0.3271, lr=1.00e-05][A
+  epoch 4/30:  33%|███▎      | 2/6 [00:00<00:01,  3.27it/s, loss=0.3271, lr=1.00e-05][A
+  epoch 4/30:  33%|███▎      | 2/6 [00:00<00:01,  3.27it/s, loss=0.3582, lr=1.00e-05][A
+  epoch 4/30:  50%|█████     | 3/6 [00:00<00:00,  3.38it/s, loss=0.3582, lr=1.00e-05][A
+  epoch 4/30:  50%|█████     | 3/6 [00:01<00:00,  3.38it/s, loss=0.4525, lr=1.00e-05][A
+  epoch 4/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.49it/s, loss=0.4525, lr=1.00e-05][A
+  epoch 4/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.49it/s, loss=0.3212, lr=1.00e-05][A
+  epoch 4/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.58it/s, loss=0.3212, lr=1.00e-05][A
+  epoch 4/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.58it/s, loss=0.2146, lr=1.00e-05][A
+  epoch 4/30: 100%|██████████| 6/6 [00:01<00:00,  3.70it/s, loss=0.2146, lr=1.00e-05][A
+                                                                                     [A
+Fine-tune:  10%|█         | 3/30 [00:14<01:49,  4.06s/it, train_loss=0.3473, val_log_loss=-0.2737, best=-0.2701, s/epoch=1.7]
+Fine-tune:  13%|█▎        | 4/30 [00:15<01:33,  3.58s/it, train_loss=0.3473, val_log_loss=-0.2737, best=-0.2701, s/epoch=1.7]
+  epoch 5/30:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 5/30:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.3621, lr=1.00e-05][A
+  epoch 5/30:  17%|█▋        | 1/6 [00:00<00:01,  3.19it/s, loss=0.3621, lr=1.00e-05][A
+  epoch 5/30:  17%|█▋        | 1/6 [00:00<00:01,  3.19it/s, loss=0.4310, lr=1.00e-05][A
+  epoch 5/30:  33%|███▎      | 2/6 [00:00<00:01,  3.25it/s, loss=0.4310, lr=1.00e-05][A
+  epoch 5/30:  33%|███▎      | 2/6 [00:00<00:01,  3.25it/s, loss=0.2918, lr=1.00e-05][A
+  epoch 5/30:  50%|█████     | 3/6 [00:00<00:00,  3.36it/s, loss=0.2918, lr=1.00e-05][A
+  epoch 5/30:  50%|█████     | 3/6 [00:01<00:00,  3.36it/s, loss=0.2764, lr=1.00e-05][A
+  epoch 5/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.59it/s, loss=0.2764, lr=1.00e-05][A
+  epoch 5/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.59it/s, loss=0.2976, lr=1.00e-05][A
+  epoch 5/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.60it/s, loss=0.2976, lr=1.00e-05][A
+  epoch 5/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.60it/s, loss=0.2860, lr=1.00e-05][A
+  epoch 5/30: 100%|██████████| 6/6 [00:01<00:00,  3.62it/s, loss=0.2860, lr=1.00e-05][A
+                                                                                     [A
+Fine-tune:  13%|█▎        | 4/30 [00:17<01:33,  3.58s/it, train_loss=0.3242, val_log_loss=-0.2713, best=-0.2701, s/epoch=1.7]
+Fine-tune:  17%|█▋        | 5/30 [00:18<01:22,  3.32s/it, train_loss=0.3242, val_log_loss=-0.2713, best=-0.2701, s/epoch=1.7]
+  epoch 6/30:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 6/30:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.2467, lr=1.00e-05][A
+  epoch 6/30:  17%|█▋        | 1/6 [00:00<00:01,  3.27it/s, loss=0.2467, lr=1.00e-05][A
+  epoch 6/30:  17%|█▋        | 1/6 [00:00<00:01,  3.27it/s, loss=0.3435, lr=1.00e-05][A
+  epoch 6/30:  33%|███▎      | 2/6 [00:00<00:01,  3.40it/s, loss=0.3435, lr=1.00e-05][A
+  epoch 6/30:  33%|███▎      | 2/6 [00:00<00:01,  3.40it/s, loss=0.3221, lr=1.00e-05][A
+  epoch 6/30:  50%|█████     | 3/6 [00:00<00:00,  3.31it/s, loss=0.3221, lr=1.00e-05][A
+  epoch 6/30:  50%|█████     | 3/6 [00:01<00:00,  3.31it/s, loss=0.2709, lr=1.00e-05][A
+  epoch 6/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.52it/s, loss=0.2709, lr=1.00e-05][A
+  epoch 6/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.52it/s, loss=0.4163, lr=1.00e-05][A
+  epoch 6/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.55it/s, loss=0.4163, lr=1.00e-05][A
+  epoch 6/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.55it/s, loss=0.3412, lr=1.00e-05][A
+  epoch 6/30: 100%|██████████| 6/6 [00:01<00:00,  3.57it/s, loss=0.3412, lr=1.00e-05][A
+                                                                                     [A
+Fine-tune:  17%|█▋        | 5/30 [00:20<01:22,  3.32s/it, train_loss=0.3234, val_log_loss=-0.2726, best=-0.2701, s/epoch=1.7]
+Fine-tune:  20%|██        | 6/30 [00:20<01:16,  3.17s/it, train_loss=0.3234, val_log_loss=-0.2726, best=-0.2701, s/epoch=1.7]
+  epoch 7/30:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 7/30:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.3779, lr=1.00e-05][A
+  epoch 7/30:  17%|█▋        | 1/6 [00:00<00:01,  3.23it/s, loss=0.3779, lr=1.00e-05][A
+  epoch 7/30:  17%|█▋        | 1/6 [00:00<00:01,  3.23it/s, loss=0.3284, lr=1.00e-05][A
+  epoch 7/30:  33%|███▎      | 2/6 [00:00<00:01,  3.29it/s, loss=0.3284, lr=1.00e-05][A
+  epoch 7/30:  33%|███▎      | 2/6 [00:00<00:01,  3.29it/s, loss=0.2290, lr=1.00e-05][A
+  epoch 7/30:  50%|█████     | 3/6 [00:00<00:00,  3.37it/s, loss=0.2290, lr=1.00e-05][A
+  epoch 7/30:  50%|█████     | 3/6 [00:01<00:00,  3.37it/s, loss=0.2867, lr=1.00e-05][A
+  epoch 7/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.54it/s, loss=0.2867, lr=1.00e-05][A
+  epoch 7/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.54it/s, loss=0.2495, lr=1.00e-05][A
+  epoch 7/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.64it/s, loss=0.2495, lr=1.00e-05][A
+  epoch 7/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.64it/s, loss=0.2638, lr=1.00e-05][A
+  epoch 7/30: 100%|██████████| 6/6 [00:01<00:00,  3.68it/s, loss=0.2638, lr=1.00e-05][A
+                                                                                     [A
+Fine-tune:  20%|██        | 6/30 [00:23<01:16,  3.17s/it, train_loss=0.2892, val_log_loss=-0.2734, best=-0.2701, s/epoch=1.7]
+Fine-tune:  23%|██▎       | 7/30 [00:23<01:10,  3.06s/it, train_loss=0.2892, val_log_loss=-0.2734, best=-0.2701, s/epoch=1.7]
+  epoch 8/30:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 8/30:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.2756, lr=1.00e-05][A
+  epoch 8/30:  17%|█▋        | 1/6 [00:00<00:01,  3.08it/s, loss=0.2756, lr=1.00e-05][A
+  epoch 8/30:  17%|█▋        | 1/6 [00:00<00:01,  3.08it/s, loss=0.2434, lr=1.00e-05][A
+  epoch 8/30:  33%|███▎      | 2/6 [00:00<00:01,  3.29it/s, loss=0.2434, lr=1.00e-05][A
+  epoch 8/30:  33%|███▎      | 2/6 [00:00<00:01,  3.29it/s, loss=0.4045, lr=1.00e-05][A
+  epoch 8/30:  50%|█████     | 3/6 [00:00<00:00,  3.07it/s, loss=0.4045, lr=1.00e-05][A
+  epoch 8/30:  50%|█████     | 3/6 [00:01<00:00,  3.07it/s, loss=0.3422, lr=1.00e-05][A
+  epoch 8/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.31it/s, loss=0.3422, lr=1.00e-05][A
+  epoch 8/30:  67%|██████▋   | 4/6 [00:01<00:00,  3.31it/s, loss=0.3187, lr=1.00e-05][A
+  epoch 8/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.39it/s, loss=0.3187, lr=1.00e-05][A
+  epoch 8/30:  83%|████████▎ | 5/6 [00:01<00:00,  3.39it/s, loss=0.2925, lr=1.00e-05][A
+  epoch 8/30: 100%|██████████| 6/6 [00:01<00:00,  3.47it/s, loss=0.2925, lr=1.00e-05][A
+                                                                                     [A
+Fine-tune:  23%|██▎       | 7/30 [00:26<01:10,  3.06s/it, train_loss=0.3128, val_log_loss=-0.2766, best=-0.2701, s/epoch=1.8]
+Fine-tune:  23%|██▎       | 7/30 [00:30<01:38,  4.29s/it, train_loss=0.3128, val_log_loss=-0.2766, best=-0.2701, s/epoch=1.8]
+{'config': 'C1', 'role': 'production-like', 'lr': 1e-05, 'epochs_run': 8, 'optimizer_steps_attempted': 48, 'optimizer_steps_taken': 48, 'amp_skipped_steps': 0, 'baseline_val_log_loss': 0.2701, 'val_log_loss_per_epoch': [0.2734, 0.2758, 0.2755, 0.2737, 0.2713, 0.2726, 0.2734, 0.2766], 'weights_changed': False, 'param_delta_l2_best': 0.0, 'param_delta_l2_last_epoch': 0.415242, 'candidate_val_log_loss': 0.2633, 'seconds': 35.7}
+  C1: no epoch beat tabicl's baseline by min_delta 0.0001, so tabicl restored the pretrained weights and wrote them as best.ckpt (parameter delta 0). The last epoch's weights did move (delta 0.415242); they are only read out on validation below.
+Baseline val log_loss: -0.2701
+Fine-tune:   0%|          | 0/10 [00:00<?, ?it/s]
+  epoch 1/10:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 1/10:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.2438, lr=5.00e-05][A
+  epoch 1/10:  17%|█▋        | 1/6 [00:00<00:01,  3.37it/s, loss=0.2438, lr=5.00e-05][A
+  epoch 1/10:  17%|█▋        | 1/6 [00:00<00:01,  3.37it/s, loss=0.3356, lr=5.00e-05][A
+  epoch 1/10:  33%|███▎      | 2/6 [00:00<00:01,  3.69it/s, loss=0.3356, lr=5.00e-05][A
+  epoch 1/10:  33%|███▎      | 2/6 [00:00<00:01,  3.69it/s, loss=0.2899, lr=5.00e-05][A
+  epoch 1/10:  50%|█████     | 3/6 [00:00<00:00,  3.75it/s, loss=0.2899, lr=5.00e-05][A
+  epoch 1/10:  50%|█████     | 3/6 [00:01<00:00,  3.75it/s, loss=0.4937, lr=5.00e-05][A
+  epoch 1/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.75it/s, loss=0.4937, lr=5.00e-05][A
+  epoch 1/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.75it/s, loss=0.2341, lr=5.00e-05][A
+  epoch 1/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.83it/s, loss=0.2341, lr=5.00e-05][A
+  epoch 1/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.83it/s, loss=0.3153, lr=5.00e-05][A
+  epoch 1/10: 100%|██████████| 6/6 [00:01<00:00,  3.92it/s, loss=0.3153, lr=5.00e-05][A
+                                                                                     [A
+Fine-tune:   0%|          | 0/10 [00:01<?, ?it/s, train_loss=0.3187, val_log_loss=-0.2865, best=-0.2701, s/epoch=1.6]
+Fine-tune:  10%|█         | 1/10 [00:02<00:24,  2.77s/it, train_loss=0.3187, val_log_loss=-0.2865, best=-0.2701, s/epoch=1.6]
+  epoch 2/10:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 2/10:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.3818, lr=5.00e-05][A
+  epoch 2/10:  17%|█▋        | 1/6 [00:00<00:01,  3.40it/s, loss=0.3818, lr=5.00e-05][A
+  epoch 2/10:  17%|█▋        | 1/6 [00:00<00:01,  3.40it/s, loss=0.2362, lr=5.00e-05][A
+  epoch 2/10:  33%|███▎      | 2/6 [00:00<00:01,  3.43it/s, loss=0.2362, lr=5.00e-05][A
+  epoch 2/10:  33%|███▎      | 2/6 [00:00<00:01,  3.43it/s, loss=0.2375, lr=5.00e-05][A
+  epoch 2/10:  50%|█████     | 3/6 [00:00<00:00,  3.41it/s, loss=0.2375, lr=5.00e-05][A
+  epoch 2/10:  50%|█████     | 3/6 [00:01<00:00,  3.41it/s, loss=0.2658, lr=5.00e-05][A
+  epoch 2/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.59it/s, loss=0.2658, lr=5.00e-05][A
+  epoch 2/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.59it/s, loss=0.3284, lr=5.00e-05][A
+  epoch 2/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.68it/s, loss=0.3284, lr=5.00e-05][A
+  epoch 2/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.68it/s, loss=0.3828, lr=5.00e-05][A
+  epoch 2/10: 100%|██████████| 6/6 [00:01<00:00,  3.75it/s, loss=0.3828, lr=5.00e-05][A
+                                                                                     [A
+Fine-tune:  10%|█         | 1/10 [00:04<00:24,  2.77s/it, train_loss=0.3054, val_log_loss=-0.3276, best=-0.2701, s/epoch=1.7]
+Fine-tune:  20%|██        | 2/10 [00:05<00:22,  2.77s/it, train_loss=0.3054, val_log_loss=-0.3276, best=-0.2701, s/epoch=1.7]
+  epoch 3/10:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 3/10:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.3449, lr=5.00e-05][A
+  epoch 3/10:  17%|█▋        | 1/6 [00:00<00:01,  3.19it/s, loss=0.3449, lr=5.00e-05][A
+  epoch 3/10:  17%|█▋        | 1/6 [00:00<00:01,  3.19it/s, loss=0.4415, lr=5.00e-05][A
+  epoch 3/10:  33%|███▎      | 2/6 [00:00<00:01,  3.34it/s, loss=0.4415, lr=5.00e-05][A
+  epoch 3/10:  33%|███▎      | 2/6 [00:00<00:01,  3.34it/s, loss=0.2961, lr=5.00e-05][A
+  epoch 3/10:  50%|█████     | 3/6 [00:00<00:00,  3.38it/s, loss=0.2961, lr=5.00e-05][A
+  epoch 3/10:  50%|█████     | 3/6 [00:01<00:00,  3.38it/s, loss=0.3009, lr=5.00e-05][A
+  epoch 3/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.54it/s, loss=0.3009, lr=5.00e-05][A
+  epoch 3/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.54it/s, loss=0.2584, lr=5.00e-05][A
+  epoch 3/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.66it/s, loss=0.2584, lr=5.00e-05][A
+  epoch 3/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.66it/s, loss=0.3644, lr=5.00e-05][A
+  epoch 3/10: 100%|██████████| 6/6 [00:01<00:00,  3.73it/s, loss=0.3644, lr=5.00e-05][A
+                                                                                     [A
+Fine-tune:  20%|██        | 2/10 [00:07<00:22,  2.77s/it, train_loss=0.3344, val_log_loss=-0.3016, best=-0.2701, s/epoch=1.7]
+Fine-tune:  20%|██        | 2/10 [00:08<00:33,  4.17s/it, train_loss=0.3344, val_log_loss=-0.3016, best=-0.2701, s/epoch=1.7]
+{'config': 'C2', 'role': 'larger steps', 'lr': 5e-05, 'epochs_run': 3, 'optimizer_steps_attempted': 18, 'optimizer_steps_taken': 18, 'amp_skipped_steps': 0, 'baseline_val_log_loss': 0.2701, 'val_log_loss_per_epoch': [0.2865, 0.3276, 0.3016], 'weights_changed': False, 'param_delta_l2_best': 0.0, 'param_delta_l2_last_epoch': 1.171713, 'candidate_val_log_loss': 0.2633, 'seconds': 10.9}
+  C2: no epoch beat tabicl's baseline by min_delta 0.0001, so tabicl restored the pretrained weights and wrote them as best.ckpt (parameter delta 0). The last epoch's weights did move (delta 1.171713); they are only read out on validation below.
+Baseline val log_loss: -0.2701
+Fine-tune:   0%|          | 0/10 [00:00<?, ?it/s]
+  epoch 1/10:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 1/10:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.2438, lr=1.00e-06][A
+  epoch 1/10:  17%|█▋        | 1/6 [00:00<00:01,  3.37it/s, loss=0.2438, lr=1.00e-06][A
+  epoch 1/10:  17%|█▋        | 1/6 [00:00<00:01,  3.37it/s, loss=0.3361, lr=1.00e-06][A
+  epoch 1/10:  33%|███▎      | 2/6 [00:00<00:01,  3.69it/s, loss=0.3361, lr=1.00e-06][A
+  epoch 1/10:  33%|███▎      | 2/6 [00:00<00:01,  3.69it/s, loss=0.2866, lr=1.00e-06][A
+  epoch 1/10:  50%|█████     | 3/6 [00:00<00:00,  3.77it/s, loss=0.2866, lr=1.00e-06][A
+  epoch 1/10:  50%|█████     | 3/6 [00:01<00:00,  3.77it/s, loss=0.4492, lr=1.00e-06][A
+  epoch 1/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.82it/s, loss=0.4492, lr=1.00e-06][A
+  epoch 1/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.82it/s, loss=0.2453, lr=1.00e-06][A
+  epoch 1/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.56it/s, loss=0.2453, lr=1.00e-06][A
+  epoch 1/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.56it/s, loss=0.3155, lr=1.00e-06][A
+  epoch 1/10: 100%|██████████| 6/6 [00:01<00:00,  3.71it/s, loss=0.3155, lr=1.00e-06][A
+                                                                                     [A
+Fine-tune:   0%|          | 0/10 [00:02<?, ?it/s, train_loss=0.3128, val_log_loss=-0.2704, best=-0.2701, s/epoch=1.6]
+Fine-tune:  10%|█         | 1/10 [00:02<00:24,  2.76s/it, train_loss=0.3128, val_log_loss=-0.2704, best=-0.2701, s/epoch=1.6]
+  epoch 2/10:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 2/10:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.3876, lr=1.00e-06][A
+  epoch 2/10:  17%|█▋        | 1/6 [00:00<00:01,  3.49it/s, loss=0.3876, lr=1.00e-06][A
+  epoch 2/10:  17%|█▋        | 1/6 [00:00<00:01,  3.49it/s, loss=0.2523, lr=1.00e-06][A
+  epoch 2/10:  33%|███▎      | 2/6 [00:00<00:01,  3.42it/s, loss=0.2523, lr=1.00e-06][A
+  epoch 2/10:  33%|███▎      | 2/6 [00:00<00:01,  3.42it/s, loss=0.2583, lr=1.00e-06][A
+  epoch 2/10:  50%|█████     | 3/6 [00:00<00:00,  3.36it/s, loss=0.2583, lr=1.00e-06][A
+  epoch 2/10:  50%|█████     | 3/6 [00:01<00:00,  3.36it/s, loss=0.2799, lr=1.00e-06][A
+  epoch 2/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.59it/s, loss=0.2799, lr=1.00e-06][A
+  epoch 2/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.59it/s, loss=0.3173, lr=1.00e-06][A
+  epoch 2/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.74it/s, loss=0.3173, lr=1.00e-06][A
+  epoch 2/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.74it/s, loss=0.4002, lr=1.00e-06][A
+  epoch 2/10: 100%|██████████| 6/6 [00:01<00:00,  3.75it/s, loss=0.4002, lr=1.00e-06][A
+                                                                                     [A
+Fine-tune:  10%|█         | 1/10 [00:04<00:24,  2.76s/it, train_loss=0.3159, val_log_loss=-0.2703, best=-0.2701, s/epoch=1.7]
+Fine-tune:  20%|██        | 2/10 [00:05<00:22,  2.79s/it, train_loss=0.3159, val_log_loss=-0.2703, best=-0.2701, s/epoch=1.7]
+  epoch 3/10:   0%|          | 0/6 [00:00<?, ?it/s][A
+  epoch 3/10:   0%|          | 0/6 [00:00<?, ?it/s, loss=0.3414, lr=1.00e-06][A
+  epoch 3/10:  17%|█▋        | 1/6 [00:00<00:01,  3.34it/s, loss=0.3414, lr=1.00e-06][A
+  epoch 3/10:  17%|█▋        | 1/6 [00:00<00:01,  3.34it/s, loss=0.3843, lr=1.00e-06][A
+  epoch 3/10:  33%|███▎      | 2/6 [00:00<00:01,  3.37it/s, loss=0.3843, lr=1.00e-06][A
+  epoch 3/10:  33%|███▎      | 2/6 [00:00<00:01,  3.37it/s, loss=0.2592, lr=1.00e-06][A
+  epoch 3/10:  50%|█████     | 3/6 [00:00<00:00,  3.41it/s, loss=0.2592, lr=1.00e-06][A
+  epoch 3/10:  50%|█████     | 3/6 [00:01<00:00,  3.41it/s, loss=0.3151, lr=1.00e-06][A
+  epoch 3/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.50it/s, loss=0.3151, lr=1.00e-06][A
+  epoch 3/10:  67%|██████▋   | 4/6 [00:01<00:00,  3.50it/s, loss=0.2588, lr=1.00e-06][A
+  epoch 3/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.56it/s, loss=0.2588, lr=1.00e-06][A
+  epoch 3/10:  83%|████████▎ | 5/6 [00:01<00:00,  3.56it/s, loss=0.3747, lr=1.00e-06][A
+  epoch 3/10: 100%|██████████| 6/6 [00:01<00:00,  3.70it/s, loss=0.3747, lr=1.00e-06][A
+                                                                                     [A
+Fine-tune:  20%|██        | 2/10 [00:07<00:22,  2.79s/it, train_loss=0.3222, val_log_loss=-0.2702, best=-0.2701, s/epoch=1.7]
+Fine-tune:  20%|██        | 2/10 [00:08<00:33,  4.20s/it, train_loss=0.3222, val_log_loss=-0.2702, best=-0.2701, s/epoch=1.7]
+{'config': 'C3', 'role': 'smaller steps', 'lr': 1e-06, 'epochs_run': 3, 'optimizer_steps_attempted': 18, 'optimizer_steps_taken': 18, 'amp_skipped_steps': 0, 'baseline_val_log_loss': 0.2701, 'val_log_loss_per_epoch': [0.2704, 0.2703, 0.2702], 'weights_changed': False, 'param_delta_l2_best': 0.0, 'param_delta_l2_last_epoch': 0.030801, 'candidate_val_log_loss': 0.2633, 'seconds': 16.3}
+  C3: no epoch beat tabicl's baseline by min_delta 0.0001, so tabicl restored the pretrained weights and wrote them as best.ckpt (parameter delta 0). The last epoch's weights did move (delta 0.030801); they are only read out on validation below.
+{'recommended_for_export': 'pretrained', 'selection_basis': 'validation:log_loss; pretrained kept (no config beat 0.2633 by more than 0.005)', 'grid_hash': '577e695363473b18c9dc668a759d6b3d6e2a50da5f640362362fd0474eb8fa99', 'device': 'Tesla T4', 'classes_': ['g', 'h']}
+{'exploratory_readout': {'label': 'exploratory readout, validation only (never the fresh test)', 'config': 'C3', 'last_epoch_val': {'accuracy': 0.904, 'balanced_accuracy': 0.8812, 'f1_weighted': 0.9025, 'log_loss': 0.2632, 'roc_auc': 0.9464}, 'param_delta_l2_last_epoch': 0.0308, 'pretrained_val': {'accuracy': 0.903, 'balanced_accuracy': 0.8804, 'f1_weighted': 0.9015, 'log_loss': 0.2633, 'roc_auc': 0.9464}, 'val_log_loss_difference_last_minus_pretrained': -0.0001}}
+grid hash (compare two masked runs digit for digit): 577e695363473b18c9dc668a759d6b3d6e2a50da5f640362362fd0474eb8fa99
+[colab] Executing cell 9/13 - tabiclv2_classifier-24...
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'report' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/report.log
+{'holdout_rows': 1000, 'one_row_resolution_pct': 0.1}
+tabicl_pretrained    accuracy=0.9030 errors=97 roc_auc=0.9464 log_loss=0.2633
+lightgbm             accuracy=0.8650 errors=135 roc_auc=0.9181 log_loss=0.3412
+random_forest        accuracy=0.8800 errors=120 roc_auc=0.9252 log_loss=0.3234
+{'latency_ms_median_of_5': {'tabicl': 806.55, 'lightgbm': 8.77, 'random_forest': 17.88}, 'rows': 1000, 'device': 'cuda'}
+{'blend_objective': 'maximise holdout accuracy', 'weight_tabicl': 1.0, 'tied_weights': 2, 'tied_weight_range': [0.99, 1.0], 'blend_holdout': {'accuracy': 0.903, 'balanced_accuracy': 0.8804, 'f1_weighted': 0.9015, 'log_loss': 0.2633, 'roc_auc': 0.9464}, 'accuracy_delta_vs_tabicl': 0.0}
+Holdout accuracy is the same for every blend weight from 0.99 to 1.00 (2 grid points); the selected weight 1.00 is not uniquely informative.
+The MAGIC fresh test is not read here: the fresh_test stage (Section 7b) scores it, only under the pre-registered settings.
+The validation blend score is selection-biased demonstration evidence (the weight was chosen on validation).
+{
+  "verdict": "sample-sanity",
+  "reason": "1000 labelled holdout row(s) from one seeded stratified split; tutorial evidence, not a benchmark",
+  "decision_rule": "argmax",
+  "selection": "validation:log_loss; pretrained kept (no config beat 0.2633 by more than 0.005)",
+  "n_holdout": 1000,
+  "n_test": null,
+  "interpretation": "One validation row is 0.0010 of accuracy (1000 rows). Log loss is the pre-registered primary metric because it registers changes accuracy cannot; no dispersion over splits was measured."
+}
+[colab] Executing cell 10/13 - tabiclv2_classifier-27...
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'fresh_test' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/fresh_test.log
+{'fresh_test_mask': 'DIMER_MASK_FRESH_TEST=1'}
+Fresh test masked: it is not read, scored or recorded in this run (not a look).
+[colab] Executing cell 11/13 - tabiclv2_classifier-30...
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'predict' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/predict.log
+No new-data file: the first eight holdout rows (already scored in Section 7) are scored instead; their unlabelled copy is written to outputs/tabiclv2_classifier_new_rows.csv
+ row_id  fLength  fWidth  fSize  fConc  fConc1    fAsym  fM3Long  fM3Trans  fAlpha    fDist prediction  probability_g  probability_h
+      0  46.2915 16.0328 2.7756 0.3403  0.1920  49.9706  33.3653  -12.7979 38.7070  75.5234          g         0.5379         0.4621
+      1  87.2384 27.9350 2.8848 0.3155  0.1806 -18.2102  66.6867  -11.3438  4.4265 342.5040          g         0.8622         0.1378
+      2  27.2304 19.2817 2.6375 0.3710  0.2039  23.0406  23.3428    9.7216 77.5379 104.2830          g         0.7898         0.2102
+      3  19.6562  9.7376 2.2380 0.5780  0.3266 -24.0292  -9.8360   -2.8001 63.0300 118.3410          g         0.8777         0.1223
+      4  30.3331 14.9817 2.4526 0.4762  0.2416 -32.2094 -20.1641   -5.1006  0.9075  74.5242          g         0.9110         0.0890
+      5  41.0677 16.2578 2.7308 0.3532  0.1812  47.4405  37.9125   16.1237 17.6710 213.3170          g         0.8590         0.1410
+      6  20.5839 12.8876 2.4191 0.4724  0.2648  12.5054  12.7741   -8.1001 26.5860 199.9600          g         0.9410         0.0590
+      7  35.5770 15.0526 2.9805 0.3964  0.2202  15.6790  14.3568    4.1406  2.0711 225.7070          g         0.9258         0.0742
+[colab] Executing cell 12/13 - tabiclv2_classifier-33...
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'export' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/export.log
+{'artifact_zip': '/content/outputs/tabiclv2_classifier_artifact.zip', 'zip_sha256': 'edfcd35af76f7264e2c9ddfa4a79b362e7f26704adc18bcff56e671e0a8ce799', 'mode': 'pretrained', 'checkpoint_bytes': 110368038, 'training_context_sha256': 'ccbad0fa44194536f6e2acf43bc59c5bae6d4d996d2a5da9bf335440ad9dce98'}
+Trusted digest for the companion notebook: set EXPECTED_ZIP_SHA256 = 'edfcd35af76f7264e2c9ddfa4a79b362e7f26704adc18bcff56e671e0a8ce799' when you hand it tabiclv2_classifier_artifact.zip.
+DIMER_MASK_FRESH_TEST = '1'
+Running stage 'reload' in the isolated environment; log: /content/dimer_runs/tabiclv2_classifier/5b3f10f16dbf/logs/reload.log
+{'reload_dir': '/content/outputs/artifact-reload', 'process': 'fresh (separate from the exporting stage)', 'labels_identical': True, 'max_abs_probability_difference': 0.0}
+PASS: bundle extracted safely, digests verified, classifier rebuilt from the bundle alone; labels identical and probabilities equivalent (rtol=1e-05, atol=1e-07).
+[colab] Executing cell 13/13 - tabiclv2_classifier-36...
+Optional activity skipped: tick RUN_ACTIVITY to run it. The canonical outputs are complete.
+[colab] Saving notebook with outputs to '<local-run-dir>/tabiclv2_classifier_colab_ae8d6ad_colab-cli-t4_output.ipynb'...
+[colab-suite 22:04:54] $ colab stop -s suite-tabicl-ae8d6ad-8467
+[colab] Stopping session 'suite-tabicl-ae8d6ad-8467'...
+[colab] Session terminated.
+[colab-suite 22:04:57] PASS: tabicl-classifier-pipeline@ae8d6ad -> <local-run-dir>/

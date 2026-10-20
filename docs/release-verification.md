@@ -157,13 +157,54 @@ The settings, grid, selection and reading rule are fixed in [`magic-finetune-pre
 when every pre-registered setting holds and the device is a Tesla T4; any other run writes `fresh-test/*_exploratory_<n>.json` and
 reads nothing.
 
-- **Evaluation of record:** none yet. The first hosted Tesla T4 run of the pre-registered settings will be recorded here (commit,
-  blob, date, `grid_hash`, the primary endpoint with its interval and verdict) and `RECORDED_EVALUATION` in `tools/tutorial_stages.py`
-  set to it; every later identical run is a **reproduction** and is listed under it.
+- **Evaluation of record (2026-10-20):** commit `9ea0888`, notebook blob `947feb162abbf8126a8579188268024da3ca3ba8`, Colab CLI
+  sequential execution on a fresh hosted Tesla T4 (PASS, 12/12 code cells, 0 errors, 450.5 s wall), determinism flags on,
+  `sdpa_backend` MATH, `grid_hash` `4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692`. Selection: **pretrained kept**
+  (no config beat validation log loss 0.2634 by more than 0.005). Fresh test (1,500 rows), labelled "pre-registered evaluation (this
+  runtime)": primary endpoint (log-loss difference, selected − pretrained) **Δ = 0.0, 95 % CI [0, 0], verdict "same model (Δ = 0)"**
+  (bootstrap seed 20261019, 10,000 resamples); accuracy 0.8993, Wilson 95 % [0.8831, 0.9136]; ROC AUC 0.95; without the 4 rows
+  duplicated in train/val (n = 1,496) the same verdict. Artifact reload: labels identical, max abs probability difference 0.0.
+  On the T4, C3 (lr 1e-6) ran all 10 epochs (60 optimizer steps taken, 0 AMP-skipped) and its weights changed (parameter delta
+  0.0592); its exploratory, validation-only readout ends at log loss 0.2628 against the pretrained 0.2634 (printed difference
+  −0.0005), far inside the 0.005 tolerance, so it was not selected. This differs from the CPU development run below, where C3
+  stopped after 3 epochs with its weights restored. Evidence: [`execution-evidence/2026-10-20-9ea0888/`](execution-evidence/2026-10-20-9ea0888/)
+  (executed notebook, `run_summary.json`, `exec.log`, the suite log, `fresh_test_report_transcription.json`). The executed
+  notebook's cell sources equal blob `947feb16` (39 cells compared). **Gap:** the report file
+  `outputs/fresh-test/tabiclv2_classifier_fresh_test_report.json` was not downloaded before the VM was released; the
+  transcription holds every field the stage printed, and the unprinted fields (checks, determinism record, row digests, power,
+  validation, notebook source) are not recoverable. `RECORDED_EVALUATION` in `tools/tutorial_stages.py` names this run; every later
+  run of the pre-registered settings is a **reproduction** and is listed here.
 - **Masked determinism check, attempt 1 (FAILED, history):** two masked hosted T4 runs at `maskcheck` `ae8d6ad` (blob `f5f0c1bb`), 96m1 and 96m2, printed identical flags but grid hashes `d7ad485b…` and `577e6953…`; C1's second training step already differed (0.3355 vs 0.3351). Both kept the pretrained model; 0 AMP-skipped steps; the fresh test was not read. Amendment 2 (`c718438`) pre-registers the MATH attention backend, and the check restarts.
-- **Before that run:** two **masked** hosted T4 runs (`DIMER_MASK_FRESH_TEST=1`) must print identical grid hashes, validation numbers
-  and selections (determinism check). If they differ, no run of record is made.
-- **Fresh-test looks so far:** none. No CPU development look was taken: the fixer's CPU checks ran with the fresh test masked.
+- **Masked determinism check, attempt 2 (PASSED):** two masked hosted T4 runs (`DIMER_MASK_FRESH_TEST=1`) under amendment 2 on the
+  throwaway branch `fix/tabicl-tutorial-review-2026-10-17-maskcheck2` (`b66a30f`, blob `652c0015`, never merged), 96m3 and 96m4 (96m4
+  reused 96m3's run directory, so its suite log is its record). Both printed `grid_hash` `4b1bf536…` and the same 27 printed result
+  lines apart from timings (`seconds`, `setup_seconds`, latency), run ids and the artifact ZIP SHA-256 (`753f347c…` vs `b24167ed…`,
+  explained below). The run of record's grid rows and exploratory readout are byte-identical to 96m4's once `seconds` is removed.
+  Hash table: `execution-evidence/2026-10-20-9ea0888/masked_determinism_check.json`; logs under `masked-determinism/` there.
+- **Why the artifact ZIP digest differs between deterministic runs.** `stage_export` at `9ea0888` builds the ZIP with
+  `shutil.make_archive`, which stamps each member with its file-system modification time; the members are written during the run,
+  so identical members give different ZIP bytes. The members themselves matched in every masked run: `checkpoint_bytes`
+  110,368,038 (the pinned base checkpoint, as the pretrained model was exported) and `training_context_sha256` `ccbad0fa…` printed
+  identically; the manifest is built from those digests and the carried `source.json`. Because the companion notebook checks
+  `EXPECTED_ZIP_SHA256` against the digest printed by **the same** E2E run that wrote the ZIP, the guidance stays correct; a digest
+  copied from another run (or from this record, `ef7a13f5…`) would not match. The export now writes the ZIP deterministically
+  (sorted members, fixed timestamp and permissions); see the code commit after this record.
+- **Fresh-test looks so far:** one, the evaluation of record above. No CPU development look was taken: the fixer's CPU checks ran
+  with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
+
+**Local-path redaction of the 2026-10-20 evidence.** Local run-directory paths were replaced by `<local-run-dir>/` before the first
+commit. SHA-256 captured → committed:
+
+| File (under `execution-evidence/2026-10-20-9ea0888/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_9ea0888_colab-cli-t4.ipynb` | `2ab26d8aca414a00528de09d5e8a9fa352ec22ed4399a6223c8e85ef06a83e79` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_9ea0888_colab-cli-t4_run_summary.json` | `e480bebc1ba051860d51ff0fd19f8587a476a57902130bb4c4bf09863ee99bd6` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_9ea0888_colab-cli-t4_exec.log` | `83be01078f114de586852f7fabb1dcbe9275e202caa60df03da80e629212cbec` | `1387c7ee2a43127ba5a6595b8357eae211cf331a38bfde4c414f4b8457fc70b2` |
+| `tabiclv2_classifier_colab_9ea0888_colab-cli-t4_suite.log` | `ef7aee31c521af8c30ce9739842897d7022262257c4347fc6e4af96142760e4c` | `ac59b8da0d8f74b1a0cd5fa8d296f8fc72dcd2f45be0271a57091f5fac217dda` |
+| `masked-determinism/96m1_ae8d6ad_suite.log` | `f6195bd6af3d34dbcf205940d4ce4cb3d1251ffad9aa71deafed345d777b5d0a` | `5c538dccbfaf3fc25a33a5fba59957727f183f0ab68e3da46953de97e87eb5b5` |
+| `masked-determinism/96m2_ae8d6ad_suite.log` | `4b0a53774627493c07f4674a5546d18e83a92baf5dfb62c837d38899edbf1d02` | `cf01f467df4e1723a3533a8fce0791f8a2ecb4a477dbda8aaca033632e05c699` |
+| `masked-determinism/96m3_b66a30f_suite.log` | `64af358c0a7248b185fa9d9bc2a705dce94a1c7129e0925d269adfb733470380` | `03bd63f25c193a526dd8fbef2b7b7d09c500bd712f00c9e7662ebae20c151629` |
+| `masked-determinism/96m4_b66a30f_suite.log` | `832ca219175ba0ec659225877202f6fcfa920edade514f2062fc7f944f888c9c` | `67053fe3c0aea2006d10819ded4b35458058c8f36458e98b767157fcc254a73f` |
 
 **Amendment 1 (2026-10-20, committed alone as `5ce528d`):** the epoch estimate is 8 (C1) / 3 (C2, C3) when no epoch improves,
 matching tabicl's patience rule and the CPU development run; optimizer steps are now **counted** (attempted, taken, AMP-skipped) and the
