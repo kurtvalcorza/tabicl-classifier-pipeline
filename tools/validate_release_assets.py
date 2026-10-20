@@ -33,7 +33,7 @@ REPO_NAME = "tabicl-classifier-pipeline"
 EXPECTED_MODEL_ID = "jingang/TabICL"
 PIPELINE_CLASS = "TabICLClassificationPipeline"
 # INF1: the exact load expression the E2E stage runner must use for the pretrained classifier.
-MODEL_LOAD_EXPR = f"{PIPELINE_CLASS}.from_pretrained(weights_dir=run.weights / P.MODEL_KEY, n_estimators=n_estimators, random_state=SEED)"
+MODEL_LOAD_EXPR = f"{PIPELINE_CLASS}.from_pretrained(weights_dir=run.weights / P.MODEL_KEY, n_estimators=n_estimators, random_state=random_state)"
 # Additional 40-hex revisions a document may legitimately cite (none by default).
 KNOWN_SHAS: frozenset[str] = frozenset(())
 # Documents that must name the model id and the immutable revision.
@@ -95,10 +95,14 @@ NOTEBOOKS = {
             "baseline = P.majority_class_baseline(train_enc[target], holdout_enc[target])",
             "MIN_SELECTION_HOLDOUT_ROWS = 50",
             'run_ft = bool(opts.get("run_fine_tuning", True))',
-            "no CUDA device: TabICLv2 fine-tuning needs a GPU runtime",
+            "no CUDA device: the pre-registered grid runs on a GPU runtime",
             "finetuner = P.create_finetuned_classifier(",
-            'P.fine_tune_classifier(finetuner, X_train, y_train, X_val=holdout[enc["features"]], y_val=holdout[enc["target"]], output_dir=str(ft_dir))',
-            "if P.compare_metric(candidate_holdout, pretrained_holdout, metric):",
+            'P.fine_tune_classifier(finetuner, train[enc["features"]], train[enc["target"]], X_val=holdout[enc["features"]], y_val=holdout[enc["target"]], output_dir=str(ft_dir))',
+            'eligible = [g for g in grid if g.get("complete") and g.get("weights_changed") is True and g["candidate_val"]["log_loss"] < reference - SELECTION_TOLERANCE]',
+            "torch.use_deterministic_algorithms(True)",
+            "def stage_fresh_test(run: Run) -> None:",
+            "differing = settings_differing(cond.get(\"settings\") or {})",
+            "return os.environ.get(MASK_ENV, \"\").strip().lower() in {\"1\", \"true\", \"yes\"}",
             "checkpoint.unlink()",
             "lgbm = LGBMClassifier(random_state=SEED, n_estimators=100, verbose=-1).fit(X_train, y_train)",
             "rf = RandomForestClassifier(random_state=SEED, n_estimators=100).fit(X_train, y_train)",
@@ -127,14 +131,15 @@ NOTEBOOKS = {
             'importlib.metadata.version("tabicl")',
         ),
         "kernel_markers": (
-            "DATA_SOURCE = 'Sample: Breast Cancer'  # @param",
+            "DATA_SOURCE = 'Sample: MAGIC Gamma Telescope'  # @param",
             "USE_BYOD = False  # @param",
             "TARGET_COLUMN = 'target'  # @param",
             "BYOD_CSV_PATH = ''  # @param",
             "TEXT_COLUMNS = []  # @param",
             "RUN_FINE_TUNING = True  # @param",
-            "FINE_TUNE_EPOCHS = 3  # @param",
-            "EVAL_METRIC = 'accuracy'  # @param",
+            "GRID_EPOCHS_CAP = 0  # @param",
+            "GRID_LEARNING_RATE = 0.0  # @param",
+            "RANDOM_STATE = 42  # @param",
             "RUN_NEW_DATA_INFERENCE = False  # @param",
             "RUN_ACTIVITY = False  # @param",
             "from google.colab import files",
@@ -143,6 +148,7 @@ NOTEBOOKS = {
             "run_stage('validate')",
             "run_stage('condition'",
             "run_stage('report')",
+            "run_stage('fresh_test')",
             "run_stage('predict'",
             "run_stage('export')",
             "run_stage('reload')",
@@ -271,7 +277,7 @@ REQUIRED_CARD_HEADINGS = [
 ]
 # Learner-facing markers every standalone DIMER tutorial in this fleet must carry (guided layer: GDL1–GDL15).
 COMMON_MARKDOWN_MARKERS = (
-    f"**Notebook specification:** DIMER Notebook Specification {NOTEBOOK_SPEC} — **standalone** (§4)",
+    "**Notebook specification:** DIMER Notebook Specification ",
     "**Mode:** `GUIDED`",
     "**Run all:**",
     "**Bring Your Own Data:**",
@@ -555,7 +561,13 @@ def _validate_notebook_structure(path: Path, notebook: dict, spec: dict, templat
     profile = dimer.get("notebook_profile")
     _check(profile in ALLOWED_PROFILES, f"{path.name}: invalid metadata.dimer.notebook_profile {profile!r}")
     _check(profile == spec["profile"], f"{path.name}: profile {profile!r} != declared {spec['profile']!r}")
-    _check(dimer.get("notebook_spec") == NOTEBOOK_SPEC, f"{path.name}: metadata.dimer must declare notebook spec version '{NOTEBOOK_SPEC}'")
+    declared = template.get("notebook_spec", NOTEBOOK_SPEC)
+    _check(dimer.get("notebook_spec") == declared, f"{path.name}: metadata.dimer must declare notebook spec version '{declared}'")
+    _check(f"DIMER Notebook Specification {declared} " in "".join(notebook["cells"][0]["source"]), f"{path.name}: the title cell must declare spec {declared}")
+    if template.get("notebook_kind"):
+        _check(dimer.get("notebook_kind") == template["notebook_kind"], f"{path.name}: metadata.dimer.notebook_kind must be {template['notebook_kind']!r} (KND1)")
+    if template.get("use_notice"):
+        _check("".join(notebook["cells"][1]["source"]) == template["use_notice"], f"{path.name}: the use notice must be the second cell, before any code (DOC17)")
     _check(dimer.get("notebook_mode") == "GUIDED", f"{path.name}: metadata.dimer.notebook_mode must be GUIDED")
     _check(dimer.get("standalone") is True, f"{path.name}: metadata.dimer.standalone must be true (ST6)")
     generated = dimer.get("generated_from")

@@ -80,8 +80,9 @@ Before changing the registry status from `Candidate` to `Release-grade`:
 1. resolve the exact PR/commit head under review and confirm static CI is green;
 2. open the exact E2E notebook revision in a new **T4 GPU** runtime with **no repository checkout** and a clean model cache;
 3. run it with one **Run all** and no restart, without editing implementation cells (form parameters at their defaults:
-   `DATA_SOURCE = 'Sample: Breast Cancer'`, `USE_BYOD = False`, `RUN_FINE_TUNING = True`, `FINE_TUNE_EPOCHS = 3`,
-   `EVAL_METRIC = 'accuracy'`, `RUN_NEW_DATA_INFERENCE = False`, `RUN_ACTIVITY = False`), then re-run the export cell
+   `DATA_SOURCE = 'Sample: MAGIC Gamma Telescope'`, `USE_BYOD = False`, `RUN_FINE_TUNING = True`, `GRID_EPOCHS_CAP = 0`,
+   `GRID_LEARNING_RATE = 0.0`, `RANDOM_STATE = 42`, `RUN_NEW_DATA_INFERENCE = False`, `RUN_ACTIVITY = False`; `DIMER_MASK_FRESH_TEST`
+   unset only for the run that is to score the fresh test — see *Fresh-test evaluation* below), then re-run the export cell
    once to confirm a second pass reuses the environment and reproduces the bundle digest;
 4. verify that Section 2 reports the carried-file verification and the isolated environment's versions (CPython 3.12.12,
    `torch` 2.14.0, `tabicl` 2.1.1) with CUDA visible, and that the exported result records `NOTEBOOK_SOURCE` equal to
@@ -90,11 +91,13 @@ Before changing the registry status from `Candidate` to `Release-grade`:
    - pinned `jingang/TabICL` acquisition at the immutable revision: the carried manifest is checked against the package
      identity, `stage_missing_files` reports the one manifest entry (`tabicl-classifier-v2-20260212.ckpt`) on a clean
      runtime, and `verify_snapshot` returns its digest;
-   - the Breast Cancer sample split 60/20/20 with stratification (`train=341, holdout=114, test=114`, two classes); the
+   - (the 2026-10-10 record below used the earlier Breast Cancer default, `train=341, holdout=114, test=114`; from 2026-10-19 the default is the
+     pinned MAGIC split, `train=3000, holdout(validation)=1000`, fresh test 1500 read only by `fresh_test`); the
      ceilings surfaced; `outputs/tabiclv2_classifier_input_manifest.json` with one recorded rejection finding;
    - in-context conditioning and the pretrained holdout/test metrics; the **fine-tuning stage ran** (epochs, the
-     candidate's holdout metrics, the selection basis, `best.ckpt` kept only); LightGBM 0.9649 (4 errors) and the random
-     forest 0.9561 (5 errors) on the holdout; the blend's tied-weight range;
+     candidate's holdout metrics, the selection basis, `best.ckpt` kept only); on the earlier Breast Cancer default (Colab T4,
+     2026-10-10, blob `051c81e9`) LightGBM 0.9649 (4 errors) and the random forest 0.9561 (5 errors) on the holdout; the blend's
+     tied-weight range;
    - `outputs/tabiclv2_classifier_evaluation_report.json` with verdict `sample-sanity`;
    - eight held-out rows scored into `outputs/tabiclv2_classifier_predictions.csv`, and their unlabelled copy
      `outputs/tabiclv2_classifier_new_rows.csv`;
@@ -142,8 +145,108 @@ was not exercised). They are not hosted runs and do not change the status.
 | 2026-10-11 | companion `cb92a9e84376` | defaults (pinned sample bundle and rows) | 21 s | 9/9 cells, no dialog, `trusted_digest: verified`, checkpoint bound to the base; labels identical to the E2E run on the same eight rows, max prob. diff 1.1e-10 |
 | 2026-10-11 | companion (previous blob, same stages) | the E2E ZIP by `ARTIFACT_ZIP_PATH` + its printed digest + its `new_rows.csv`, `RUN_ACTIVITY` | 66 s | 9/9 cells, `trusted_digest: verified (EXPECTED_ZIP_SHA256)`, `sample_kind: BYOD`, same predictions |
 
+**Local-path redaction (2026-10-19, R96-m4).** The two 2026-10-10 `_exec.log` files carried the executor's local home directory in 2 lines each. That prefix was replaced by `<runner>/` in a separate commit; nothing else changed. SHA-256 before → after: `tabiclv2_classifier_colab_f59e233_colab-cli-t4_exec.log` `9b3074714ee35eb2830cc335c6fdd1e9e1ff8ccadfac161010d8220a56cf65a4` → `8dc1cfa361052293d3f042536759dee8a58b31d9f57889b505c360910e5d9821`; `tabiclv2_classifier_artifact_inference_colab_f59e233_colab-cli-t4_exec.log` `3c1663ee88dcf934dc2486ed0f6f0f87e86aea3401557daa2ab623e7fec3b4d5` → `fa82c03ad0cf79c5204776477c466c08cc1ff71494173777353233fd5a37e6b3`. The executed notebooks and run summaries carried no local path and are unchanged.
+
 On a generic Linux kernel the `report` stage needs the system OpenMP library (`libgomp.so.1`, Debian/Ubuntu `libgomp1`)
 for LightGBM; Colab and Kaggle images have it. The local drives supplied it from the locked `torch` wheel.
+
+## Fresh-test evaluation (MAGIC, pre-registered 2026-10-19)
+
+The settings, grid, selection and reading rule are fixed in [`magic-finetune-preregistration.md`](magic-finetune-preregistration.md)
+(committed alone as `64c968c` before any implementing code). The 1,500-row fresh test is scored only by the `fresh_test` stage, only
+when every pre-registered setting holds and the device is a Tesla T4; any other run writes `fresh-test/*_exploratory_<n>.json` and
+reads nothing.
+
+- **Evaluation of record (2026-10-20):** commit `9ea0888`, notebook blob `947feb162abbf8126a8579188268024da3ca3ba8`, Colab CLI
+  sequential execution on a fresh hosted Tesla T4 (PASS, 12/12 code cells, 0 errors, 450.5 s wall), determinism flags on,
+  `sdpa_backend` MATH, `grid_hash` `4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692`. Selection: **pretrained kept**
+  (no config beat validation log loss 0.2634 by more than 0.005). Fresh test (1,500 rows), labelled "pre-registered evaluation (this
+  runtime)": primary endpoint (log-loss difference, selected − pretrained) **Δ = 0.0, 95 % CI [0, 0], verdict "same model (Δ = 0)"**
+  (bootstrap seed 20261019, 10,000 resamples); accuracy 0.8993, Wilson 95 % [0.8831, 0.9136]; ROC AUC 0.95; without the 4 rows
+  duplicated in train/val (n = 1,496) the same verdict. Artifact reload: labels identical, max abs probability difference 0.0.
+  On the T4, C3 (lr 1e-6) ran all 10 epochs (60 optimizer steps taken, 0 AMP-skipped) and its weights changed (parameter delta
+  0.0592); its exploratory, validation-only readout ends at log loss 0.2628 against the pretrained 0.2634 (printed difference
+  −0.0005), far inside the 0.005 tolerance, so it was not selected. This differs from the CPU development run below, where C3
+  stopped after 3 epochs with its weights restored. Evidence: [`execution-evidence/2026-10-20-9ea0888/`](execution-evidence/2026-10-20-9ea0888/)
+  (executed notebook, `run_summary.json`, `exec.log`, the suite log, `fresh_test_report_transcription.json`). The executed
+  notebook's cell sources equal blob `947feb16` (39 cells compared). **Gap:** the report file
+  `outputs/fresh-test/tabiclv2_classifier_fresh_test_report.json` was not downloaded before the VM was released; the
+  transcription holds every field the stage printed, and the unprinted fields (checks, determinism record, row digests, power,
+  validation, notebook source) are not recoverable. `RECORDED_EVALUATION` in `tools/tutorial_stages.py` names this run; every later
+  run of the pre-registered settings is a **reproduction** and is listed here.
+- **Masked determinism check, attempt 1 (FAILED, history):** two masked hosted T4 runs at `maskcheck` `ae8d6ad` (blob `f5f0c1bb`), 96m1 and 96m2, printed identical flags but grid hashes `d7ad485b…` and `577e6953…`; C1's second training step already differed (0.3355 vs 0.3351). Both kept the pretrained model; 0 AMP-skipped steps; the fresh test was not read. Amendment 2 (`c718438`) pre-registers the MATH attention backend, and the check restarts.
+- **Masked determinism check, attempt 2 (PASSED):** two masked hosted T4 runs (`DIMER_MASK_FRESH_TEST=1`) under amendment 2 on the
+  throwaway branch `fix/tabicl-tutorial-review-2026-10-17-maskcheck2` (`b66a30f`, blob `652c0015`, never merged), 96m3 and 96m4 (96m4
+  reused 96m3's run directory, so its suite log is its record). Both printed `grid_hash` `4b1bf536…` and the same 27 printed result
+  lines apart from timings (`seconds`, `setup_seconds`, latency), run ids and the artifact ZIP SHA-256 (`753f347c…` vs `b24167ed…`,
+  explained below). The run of record's grid rows and exploratory readout are byte-identical to 96m4's once `seconds` is removed.
+  Hash table: `execution-evidence/2026-10-20-9ea0888/masked_determinism_check.json`; logs under `masked-determinism/` there.
+- **Why the artifact ZIP digest differs between deterministic runs.** `stage_export` at `9ea0888` builds the ZIP with
+  `shutil.make_archive`, which stamps each member with its file-system modification time; the members are written during the run,
+  so identical members give different ZIP bytes. The members themselves matched in every masked run: `checkpoint_bytes`
+  110,368,038 (the pinned base checkpoint, as the pretrained model was exported) and `training_context_sha256` `ccbad0fa…` printed
+  identically; the manifest is built from those digests and the carried `source.json`. Because the companion notebook checks
+  `EXPECTED_ZIP_SHA256` against the digest printed by **the same** E2E run that wrote the ZIP, the guidance stays correct; a digest
+  copied from another run (or from this record, `ef7a13f5…`) would not match. The export now writes the ZIP deterministically
+  (sorted members, fixed timestamp and permissions); see the code commit after this record.
+- **Reproduction 1 (hosted Colab T4, 2026-10-20, `fb16f81` / blob `baf03478`): results reproduced, grid hash not.** The first
+  run of the record-pinned notebook in a fresh runtime (account 1, started 2026-10-20T12:55:58Z, wall 370.2 s, exit 0, input
+  unchanged; executed cell sources equal blob `baf03478`, 39 cells). Evidence:
+  [`execution-evidence/2026-10-20-fb16f81/`](execution-evidence/2026-10-20-fb16f81/). It is labelled `reproduction`, selects
+  `pretrained`, and reproduces every reported result: fresh-test log-loss difference 0.0, 95 % CI [0, 0], verdict
+  **same model (Δ = 0)**; accuracy 0.8993 (Wilson [0.8831, 0.9136]); the same verdict without the 4 duplicated rows; artifact
+  reload identical. It prints `matches_record: False`, `differs: ['grid_hash']`: `grid_hash` `2aa9e0cd…` against the record's
+  `4b1bf536…`. The validation curves of the fine-tuned configurations differ in the fourth decimal (C1 epoch-1 step losses agree
+  at step 1, 0.2437, then 0.3341 vs 0.3344 at step 2; C3 last-epoch validation log loss 0.2628 vs 0.2627), with the same torch
+  2.14.0 / tabicl 2.1.1 / 90 locked packages, the MATH attention backend active and every determinism flag set. Three earlier
+  hosted runs (96m3, 96m4, the record) agreed exactly; this one did not, so a residual non-deterministic step remains in tabicl's
+  fp16 fine-tuning on the T4 that `torch.use_deterministic_algorithms(True)` does not flag. The selection cannot flip on drift of
+  this size: the exported system is the pretrained checkpoint, which fine-tuning never touches, and the closest configuration is
+  about 0.0006 better on validation against the 0.005 tolerance. Owner ruling (2026-10-20): disclose and merge; the remaining op
+  is tracked as a follow-up. The artifact ZIP (`2dc82d55…`) is the first written by the deterministic exporter.
+- **Fresh-test looks so far:** two, the evaluation of record and reproduction 1 above. No CPU development look was taken: the
+  fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
+
+**Local-path redaction of the reproduction evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
+
+| File (under `execution-evidence/2026-10-20-fb16f81/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_fb16f81_colab-cli-t4.ipynb` | `da2513c2a2a4acfb840605d6bea0782577a0da986b3eccc8ee1eb6a1de807d0b` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_fb16f81_colab-cli-t4_run_summary.json` | `90c9eb7a463313dd134cdf8678abd42582f2f2194d9b29ab29aeecad78b2fad0` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_fb16f81_colab-cli-t4_exec.log` | `e3a3cd18bc5d9bbda8f22dfc2603fe9a00b3771b297eb0b2703dfdb7d32e21b1` | `e36f4c883b506b9adc5cac7a0d8eb992bf46549fe9661dbbb921bf795f5b1a3d` (2 replacements) |
+| `tabiclv2_classifier_colab_fb16f81_colab-cli-t4_suite.log` | `5a9cc6d9a158961dcfe6d60f2e9c890b8baa3edebbf18d6d3ea6ac358649f8ab` | `372fd48d5459ba9a92e7165340120ee3d95aff81fc383c13fb320d6a4d283a6a` (4 replacements) |
+
+**Local-path redaction of the 2026-10-20 evidence.** Local run-directory paths were replaced by `<local-run-dir>/` before the first
+commit. SHA-256 captured → committed:
+
+| File (under `execution-evidence/2026-10-20-9ea0888/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_9ea0888_colab-cli-t4.ipynb` | `2ab26d8aca414a00528de09d5e8a9fa352ec22ed4399a6223c8e85ef06a83e79` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_9ea0888_colab-cli-t4_run_summary.json` | `e480bebc1ba051860d51ff0fd19f8587a476a57902130bb4c4bf09863ee99bd6` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_9ea0888_colab-cli-t4_exec.log` | `83be01078f114de586852f7fabb1dcbe9275e202caa60df03da80e629212cbec` | `1387c7ee2a43127ba5a6595b8357eae211cf331a38bfde4c414f4b8457fc70b2` |
+| `tabiclv2_classifier_colab_9ea0888_colab-cli-t4_suite.log` | `ef7aee31c521af8c30ce9739842897d7022262257c4347fc6e4af96142760e4c` | `ac59b8da0d8f74b1a0cd5fa8d296f8fc72dcd2f45be0271a57091f5fac217dda` |
+| `masked-determinism/96m1_ae8d6ad_suite.log` | `f6195bd6af3d34dbcf205940d4ce4cb3d1251ffad9aa71deafed345d777b5d0a` | `5c538dccbfaf3fc25a33a5fba59957727f183f0ab68e3da46953de97e87eb5b5` |
+| `masked-determinism/96m2_ae8d6ad_suite.log` | `4b0a53774627493c07f4674a5546d18e83a92baf5dfb62c837d38899edbf1d02` | `cf01f467df4e1723a3533a8fce0791f8a2ecb4a477dbda8aaca033632e05c699` |
+| `masked-determinism/96m3_b66a30f_suite.log` | `64af358c0a7248b185fa9d9bc2a705dce94a1c7129e0925d269adfb733470380` | `03bd63f25c193a526dd8fbef2b7b7d09c500bd712f00c9e7662ebae20c151629` |
+| `masked-determinism/96m4_b66a30f_suite.log` | `832ca219175ba0ec659225877202f6fcfa920edade514f2062fc7f944f888c9c` | `67053fe3c0aea2006d10819ded4b35458058c8f36458e98b767157fcc254a73f` |
+
+**Amendment 1 (2026-10-20, committed alone as `5ce528d`):** the epoch estimate is 8 (C1) / 3 (C2, C3) when no epoch improves,
+matching tabicl's patience rule and the CPU development run; optimizer steps are now **counted** (attempted, taken, AMP-skipped) and the
+tie rule uses the taken count; a restored config (`weights_changed: false`) is never selected as fine-tuned; the mask does not stop the
+pinned archive (which also holds `test.csv`) from being downloaded and cached, only from being extracted or read; and a look marker
+outside `outputs/` keeps a later scoring labelled "reproduction" after `outputs/` is deleted.
+
+**Redaction placeholder.** The 2026-10-19 redaction of the two 2026-10-10 exec logs used `<runner>/`; the fleet's shared design names
+`<local-run-dir>/`, which new redactions use. The two committed logs are left as recorded (their before/after hashes are above); the
+unredacted path remains in the repository's earlier history, which is not rewritten.
+
+### CPU development records (not clean-runtime evidence; fresh test masked)
+
+| Date | Code | What ran | Result |
+|---|---|---|---|
+| 2026-10-19 | uncommitted working tree on `fix/tabicl-tutorial-review-2026-10-17` (after `9fa714a`) | stages data → validate → condition (`cpu_grid=True`, exploratory) → report → fresh_test (masked, then unmasked) → predict → export → reload on CPU, `DIMER_MASK_FRESH_TEST=1` except for the one unmasked `fresh_test` call | pretrained validation log loss 0.2634, accuracy 0.903 (LightGBM 0.3412 / 0.865, random forest 0.3234 / 0.880). C1 (1e-5): 8 epochs, 48 steps, every epoch 0.2712–0.2762 against tabicl's baseline 0.2701, `weights_changed: false`, last-epoch delta 0.415. C2 (5e-5): 3 epochs, 18 steps, 0.2864 / 0.3340 / 0.3027, delta 0.0 kept / 1.171 last. C3 (1e-6): 3 epochs, 18 steps, 0.2702 / 0.2701 / 0.2700, delta 0.0 kept / 0.031 last. Selection: pretrained kept. CPU grid hash `11cb0310…b19d` (a CPU hash; not comparable with T4). The unmasked `fresh_test` call wrote `not scored (exploratory)` with `settings_differing: [cpu_grid, device]` and read nothing. Reload PASS. 0 "y_prob do not sum to one" warnings. |
+| 2026-10-20 | uncommitted working tree after `5ce528d` (round-2 code: counted steps, restored-config rule, look marker) | weights → data → validate → condition (`cpu_grid=True`) → fresh_test, all with `DIMER_MASK_FRESH_TEST=1` | same validation curves and selection as 2026-10-19; **counted** optimizer steps attempted/taken/AMP-skipped: C1 48/48/0, C2 18/18/0, C3 18/18/0 (AMP is off on CPU, so no skips are possible here; the T4 run is where fp16 skips can occur); grid hash `11cb0310…b19d` again (third identical CPU run); fresh test masked, not read. |
+| 2026-10-20 | uncommitted working tree after `c718438` (amendment 2 code: MATH SDPA backend, FlashAttention-3 off, warnings surfaced) | weights → data → validate → condition (`cpu_grid=True`) → report → fresh_test, all with `DIMER_MASK_FRESH_TEST=1` | determinism record now includes `sdpa_backend: MATH`, `flash_attn3: false`; every number unchanged to 4 decimals: pretrained validation log loss 0.2634, accuracy 0.903; C1/C2/C3 curves and counted steps as on 2026-10-20 above; pretrained kept; 0 `DETERMINISM WARNING` lines. Grid hash `8db910b8…2a1a` (the backend is now a hash input, so it differs from the earlier CPU hash `11cb0310…` with identical numbers). Fresh test masked, not read. |
 
 ## Current status
 

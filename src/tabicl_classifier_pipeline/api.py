@@ -111,6 +111,25 @@ def predict_labels(model: Any, X: Any) -> np.ndarray:
     return values
 
 
+MAX_PROBABILITY_ROW_SUM_DEVIATION = 1e-3  # TabICL's float32/fp16 ensemble average drifts from 1 by ~1e-7; more is a defect
+
+
+def renormalise_probabilities(proba: Any) -> tuple[np.ndarray, float]:
+    """Return ``(rows divided by their sum, max |row sum - 1| before renormalising)``.
+
+    TabICL averages ensemble members in reduced precision, so rows can miss 1 by rounding; scikit-learn's metrics then
+    warn that ``y_prob`` values do not sum to one. A deviation above ``MAX_PROBABILITY_ROW_SUM_DEVIATION`` is refused
+    rather than hidden."""
+    values = np.asarray(proba, dtype=float)
+    sums = values.sum(axis=1, keepdims=True)
+    if values.size and not float(np.min(values)) >= 0.0:
+        raise RuntimeError(f"class probabilities contain a negative or undefined entry (min = {float(np.min(values)):.3g})")
+    deviation = float(np.max(np.abs(sums - 1.0))) if values.size else 0.0
+    if not deviation <= MAX_PROBABILITY_ROW_SUM_DEVIATION:
+        raise RuntimeError(f"class probabilities do not sum to one (max |row sum - 1| = {deviation:.3g})")
+    return values / sums, deviation
+
+
 def predict_probabilities(model: Any, X: Any) -> np.ndarray:
     """Return finite class probabilities, one column per entry of ``model.classes_`` in that order."""
     values = np.asarray(model.predict_proba(X), dtype=float)
@@ -118,7 +137,7 @@ def predict_probabilities(model: Any, X: Any) -> np.ndarray:
         raise RuntimeError("TabICL produced probabilities of an unexpected shape")
     if not np.isfinite(values).all():
         raise RuntimeError("TabICL produced non-finite class probabilities")
-    return values
+    return renormalise_probabilities(values)[0]
 
 
 def align_probabilities(proba: Any, model_classes: Sequence[Any], classes: Sequence[Any]) -> np.ndarray:
@@ -569,6 +588,7 @@ def classification_metrics(y_true: Any, y_pred: Any, y_proba: Any, classes: Sequ
         raise ValueError("y_true and y_pred must be non-empty and the same length")
     if proba.ndim != 2 or proba.shape != (y.size, len(labels)):
         raise ValueError("y_proba must have one row per example and one column per class")
+    proba = renormalise_probabilities(proba)[0]  # rows that miss 1 by rounding only (R96-m10)
     out = {
         "accuracy": float(accuracy_score(y, pred)),
         "balanced_accuracy": float(balanced_accuracy_score(y, pred)),

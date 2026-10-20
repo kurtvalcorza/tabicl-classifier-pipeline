@@ -205,7 +205,7 @@ def carried_files(repo: Path, template: dict[str, Any], revision: str) -> tuple[
         "repository": f"kurtvalcorza/{template['repo_name']}",
         "revision": revision,
         "generator": GENERATOR_VERSION,
-        "notebook_spec": NOTEBOOK_SPEC,
+        "notebook_spec": template.get("notebook_spec", NOTEBOOK_SPEC),
         "files": {dest: sha256_text(text) for dest, text in files.items()} | {dest: sha256_bytes(base64.b64decode(b)) for dest, b in binary.items()},
         "sources": {**sources, **template.get("carried_binary", {})},
     }
@@ -423,6 +423,52 @@ def _probe(distributions: list[str]) -> str:
     return f"import importlib.metadata, json, platform, torch; print(json.dumps({{'python': platform.python_version(), **{{d: importlib.metadata.version(d) for d in [{names}]}}, 'cuda': torch.cuda.is_available()}}))"
 
 
+RUNNER_EXTRAS = (
+    # (old, new) pairs applied to the rendered install cell for a template with ``e2e_runner_extras``.
+    (
+        "def run_stage(stage, **options):",
+        "class Refused(RuntimeError):\n"
+        "    \"\"\"An input refusal: shown as one actionable message, without a traceback (NOTEBOOK_SPEC 2.5 DAT20).\"\"\"\n\n"
+        "    def _render_traceback_(self):\n"
+        "        return ['Refused: ' + str(self)]\n\n\n"
+        "def run_stage(stage, **options):",
+    ),
+    (
+        "    command = [str(PYTHON), '-u',",
+        "    env = dict(ENV, DIMER_ISOLATED_ENV=str(VENV))\n"
+        "    # Re-read the fresh-test mask on every call: a copy taken once at install would fail open.\n"
+        "    mask = os.environ.get('DIMER_MASK_FRESH_TEST', '')\n"
+        "    env['DIMER_MASK_FRESH_TEST'] = mask\n"
+        "    print('DIMER_MASK_FRESH_TEST =', repr(mask) if mask else 'unset', flush=True)\n"
+        "    command = [str(PYTHON), '-u',",
+    ),
+    ("process = subprocess.Popen(command, env=ENV,", "process = subprocess.Popen(command, env=env,"),
+    (
+        "        detail = 'see the log above'\n"
+        "        if error_file.is_file():\n"
+        "            error = json.loads(error_file.read_text(encoding='utf-8'))\n"
+        "            detail = error['type'] + ': ' + error['message']\n",
+        "        detail, error = 'see the log above', {}\n"
+        "        if error_file.is_file():\n"
+        "            try:\n"
+        "                error = json.loads(error_file.read_text(encoding='utf-8'))\n"
+        "                detail = error['type'] + ': ' + error['message']\n"
+        "            except (ValueError, KeyError):\n"
+        "                error = {}\n"
+        "        if error.get('refusal'):\n"
+        "            raise Refused(error['message'] + ' Nothing from the refused input was kept: fix it and re-run the Section 4 cell.')\n",
+    ),
+)
+
+
+def _runner_extras(code: str) -> str:
+    for old, new in RUNNER_EXTRAS:
+        if code.count(old) != 1:
+            raise SystemExit(f"install cell no longer contains {old[:60]!r}; update RUNNER_EXTRAS")
+        code = code.replace(old, new)
+    return code
+
+
 def _infrastructure_code(key: str, ctx: dict[str, Any], template: dict[str, Any]) -> str:
     if key == "check":
         disk = template["disk_gib"]
@@ -431,7 +477,7 @@ def _infrastructure_code(key: str, ctx: dict[str, Any], template: dict[str, Any]
         return CARRIER_CELL.format(files=repr(ctx["files"]), binary=repr(ctx["binary"]), hashes=repr(ctx["hashes"]), source=SOURCE_RECORD)
     if key == "install":
         uv = template["uv"]
-        return INSTALL_CELL.format(
+        code = INSTALL_CELL.format(
             lock_sha256=ctx["lock_sha256"],
             uv_url=uv["url"],
             uv_bytes=int(uv["bytes"]),
@@ -444,6 +490,7 @@ def _infrastructure_code(key: str, ctx: dict[str, Any], template: dict[str, Any]
             n_locked=ctx["lock_packages"],
             runner=RUNNER_DEST,
         )
+        return _runner_extras(code) if template.get("e2e_runner_extras") else code
     if key == "weights":
         return WEIGHTS_CELL
     raise SystemExit(f"unknown infrastructure cell {key!r}")
@@ -531,8 +578,9 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
         f"# {template['title']}\n\n{badges}\n\n"
         f"**Profile:** `{template['profile']}`  \n"
         f"**Mode:** `{template['mode']}`  \n"
-        f"**Notebook specification:** DIMER Notebook Specification {NOTEBOOK_SPEC} — **standalone** (§4)  \n"
-        f"**Capability:** {template['capability']}\n\n"
+        f"**Notebook specification:** DIMER Notebook Specification {template.get('notebook_spec', NOTEBOOK_SPEC)} — **standalone** (§4)  \n"
+        + (f"**Notebook kind:** `{template['notebook_kind']}`  \n" if template.get("notebook_kind") else "")
+        + f"**Capability:** {template['capability']}\n\n"
         f"**This notebook is standalone.** Section 2 carries the repository's package ({len(ctx['modules'])} modules under "
         f"`{ctx['pkg_rel']}/`, at revision `{ctx['revision'][:12]}`), the stage runner, the hash-locked requirements "
         f"({ctx['lock_packages']} packages) and the pinned checkpoint manifest, and verifies every carried file against its "
@@ -550,6 +598,8 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
         f"**This notebook does not demonstrate:** {template['exclusions'].strip()}"
     )
     add(_md(header.replace("{MODEL_ID}", ctx["MODEL_ID"])))
+    if template.get("use_notice"):
+        add(_md(template["use_notice"]))  # DOC17: after the title, before the first code cell
     for opening in template["guided"].get("opening", []):
         add(_md(opening.format(**fmt)))
 
@@ -586,7 +636,8 @@ def render(repo: Path, template: dict[str, Any], revision: str | None = None) ->
             "dimer": {
                 "notebook_profile": template["profile"],
                 "notebook_mode": template["mode"],
-                "notebook_spec": NOTEBOOK_SPEC,
+                "notebook_spec": template.get("notebook_spec", NOTEBOOK_SPEC),
+                **({"notebook_kind": template["notebook_kind"]} if template.get("notebook_kind") else {}),
                 "standalone": True,
                 "requires_dimer_worker": False,
                 "environment": "isolated hash-locked uv environment; nothing installed into the kernel",

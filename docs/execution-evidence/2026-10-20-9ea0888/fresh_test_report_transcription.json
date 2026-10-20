@@ -1,0 +1,138 @@
+{
+ "what": "Transcription of the fields the fresh_test stage printed in the run of record. The report file itself (outputs/fresh-test/tabiclv2_classifier_fresh_test_report.json on the Colab VM) was NOT downloaded by the suite (it saves only the executed notebook, run_summary.json and exec.log) and the VM was released, so the file is lost. Fields the stage writes but does not print (checks, determinism record, fresh_test row digests, power, validation, notebook_source) are not reproduced here; the determinism flags, grid hash and selection are printed elsewhere in the same log.",
+ "source": "tabiclv2_classifier_colab_9ea0888_colab-cli-t4_suite.log (Colab CLI cell 9/12) and the executed notebook in this folder",
+ "commit": "9ea0888d9df24a9568613ec9c51dd1fe65cea443",
+ "notebook_blob": "947feb162abbf8126a8579188268024da3ca3ba8",
+ "date_utc": "2026-10-20",
+ "device": "Tesla T4",
+ "grid_hash": "4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692",
+ "selection": {
+  "recommended_for_export": "pretrained",
+  "selection_basis": "validation:log_loss; pretrained kept (no config beat 0.2634 by more than 0.005)",
+  "grid_hash": "4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692",
+  "device": "Tesla T4",
+  "classes_": [
+   "g",
+   "h"
+  ]
+ },
+ "printed_look": {
+  "test_look": "pre-registered evaluation (this runtime)",
+  "written": "outputs/fresh-test/tabiclv2_classifier_fresh_test_report.json",
+  "selected": "pretrained"
+ },
+ "printed_reading": {
+  "primary": {
+   "endpoint": "fresh-test log loss difference, selected - pretrained",
+   "delta": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ],
+   "verdict": "same model (Δ = 0)",
+   "practical_delta": 0.005,
+   "bootstrap": {
+    "seed": 20261019,
+    "n_boot": 10000
+   }
+  },
+  "accuracy": {
+   "pretrained": 0.8993,
+   "pretrained_wilson95": [
+    0.8831,
+    0.9136
+   ],
+   "selected": 0.8993,
+   "selected_wilson95": [
+    0.8831,
+    0.9136
+   ],
+   "difference": 0.0,
+   "difference_ci95": [
+    0.0,
+    0.0
+   ]
+  },
+  "roc_auc": {
+   "pretrained": 0.95,
+   "selected": 0.95
+  },
+  "sensitivity_without_duplicated_rows": {
+   "excluded_rows": 4,
+   "n": 1496,
+   "primary": {
+    "endpoint": "fresh-test log loss difference, selected - pretrained",
+    "delta": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "verdict": "same model (Δ = 0)",
+    "practical_delta": 0.005,
+    "bootstrap": {
+     "seed": 20261019,
+     "n_boot": 10000
+    }
+   }
+  }
+ },
+ "c3_grid_row": {
+  "config": "C3",
+  "role": "smaller steps",
+  "lr": 1e-06,
+  "epochs_run": 10,
+  "optimizer_steps_attempted": 60,
+  "optimizer_steps_taken": 60,
+  "amp_skipped_steps": 0,
+  "baseline_val_log_loss": 0.2702,
+  "val_log_loss_per_epoch": [
+   0.2705,
+   0.2701,
+   0.27,
+   0.2699,
+   0.2696,
+   0.2695,
+   0.2692,
+   0.2691,
+   0.2692,
+   0.2689
+  ],
+  "weights_changed": true,
+  "param_delta_l2_best": 0.059209,
+  "param_delta_l2_last_epoch": 0.059209,
+  "candidate_val_log_loss": 0.2628,
+  "seconds": 77.9
+ },
+ "exploratory_readout_validation_only": {
+  "exploratory_readout": {
+   "label": "exploratory readout, validation only (never the fresh test)",
+   "config": "C3",
+   "last_epoch_val": {
+    "accuracy": 0.901,
+    "balanced_accuracy": 0.8769,
+    "f1_weighted": 0.8993,
+    "log_loss": 0.2628,
+    "roc_auc": 0.9465
+   },
+   "param_delta_l2_last_epoch": 0.0592,
+   "pretrained_val": {
+    "accuracy": 0.903,
+    "balanced_accuracy": 0.8804,
+    "f1_weighted": 0.9015,
+    "log_loss": 0.2634,
+    "roc_auc": 0.9464
+   },
+   "val_log_loss_difference_last_minus_pretrained": -0.0005
+  }
+ },
+ "export": {
+  "zip_sha256": "ef7a13f541446544e9280c1c916de86c51ed86631bd0318c855142c8660a0926",
+  "mode": "pretrained",
+  "checkpoint_bytes": 110368038,
+  "training_context_sha256": "ccbad0fa44194536f6e2acf43bc59c5bae6d4d996d2a5da9bf335440ad9dce98"
+ },
+ "reload": {
+  "labels_identical": true,
+  "max_abs_probability_difference": 0.0
+ }
+}

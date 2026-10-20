@@ -1,0 +1,37 @@
+{
+ "what": "Masked determinism check (DIMER_MASK_FRESH_TEST=1, fresh test never read). Suite logs in this folder, local paths redacted.",
+ "attempt_1_failed_history": {
+  "commit": "ae8d6ad",
+  "blob": "f5f0c1bb",
+  "runs": {
+   "96m1": {
+    "grid_hash": "d7ad485bfd8b8508778539914e6a68e8f90c66ffa5f61c1e47b69f358f1dbab4",
+    "zip_sha256": "d3be5b157f0998a9cfeaf31bec6768fe51cf8bbdc41d3dd3f8d7d3c126a3fe5b"
+   },
+   "96m2": {
+    "grid_hash": "577e695363473b18c9dc668a759d6b3d6e2a50da5f640362362fd0474eb8fa99",
+    "zip_sha256": "edfcd35af76f7264e2c9ddfa4a79b362e7f26704adc18bcff56e671e0a8ce799"
+   }
+  }
+ },
+ "attempt_2_passed": {
+  "branch": "fix/tabicl-tutorial-review-2026-10-17-maskcheck2 (throwaway, never merged)",
+  "commit": "b66a30f",
+  "blob": "652c0015",
+  "runs": {
+   "96m3": {
+    "grid_hash": "4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692",
+    "zip_sha256": "753f347cbdddca673092d651ffb2ee093b88eaae280b1ec3ef3c9d27e767b61e"
+   },
+   "96m4": {
+    "grid_hash": "4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692",
+    "zip_sha256": "b24167edfbe4971b4ee7b31f7cbf4e90a99bbf3006f8c6c95dabbcf363f6d926"
+   }
+  },
+  "printed_dict_lines_compared": 27,
+  "differing": "timings (seconds, setup_seconds, latency), run ids and the artifact zip SHA-256 only",
+  "note_96m4": "96m4 reused the run directory of 96m3, so its suite log is the record of that run"
+ },
+ "run_of_record_vs_96m4": "grid rows (every config line, seconds removed) and the exploratory readout are byte-identical; grid_hash identical",
+ "zip_sha256_difference": "not a determinism failure: shutil.make_archive stamps each member with its file-system mtime (written during the run), so identical members give different ZIP bytes. checkpoint_bytes (110368038, the pinned base) and training_context_sha256 (ccbad0fa...) printed identically in all runs."
+}
