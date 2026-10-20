@@ -189,8 +189,32 @@ reads nothing.
   `EXPECTED_ZIP_SHA256` against the digest printed by **the same** E2E run that wrote the ZIP, the guidance stays correct; a digest
   copied from another run (or from this record, `ef7a13f5…`) would not match. The export now writes the ZIP deterministically
   (sorted members, fixed timestamp and permissions); see the code commit after this record.
-- **Fresh-test looks so far:** one, the evaluation of record above. No CPU development look was taken: the fixer's CPU checks ran
-  with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
+- **Reproduction 1 (hosted Colab T4, 2026-10-20, `fb16f81` / blob `baf03478`): results reproduced, grid hash not.** The first
+  run of the record-pinned notebook in a fresh runtime (account 1, started 2026-10-20T12:55:58Z, wall 370.2 s, exit 0, input
+  unchanged; executed cell sources equal blob `baf03478`, 39 cells). Evidence:
+  [`execution-evidence/2026-10-20-fb16f81/`](execution-evidence/2026-10-20-fb16f81/). It is labelled `reproduction`, selects
+  `pretrained`, and reproduces every reported result: fresh-test log-loss difference 0.0, 95 % CI [0, 0], verdict
+  **same model (Δ = 0)**; accuracy 0.8993 (Wilson [0.8831, 0.9136]); the same verdict without the 4 duplicated rows; artifact
+  reload identical. It prints `matches_record: False`, `differs: ['grid_hash']`: `grid_hash` `2aa9e0cd…` against the record's
+  `4b1bf536…`. The validation curves of the fine-tuned configurations differ in the fourth decimal (C1 epoch-1 step losses agree
+  at step 1, 0.2437, then 0.3341 vs 0.3344 at step 2; C3 last-epoch validation log loss 0.2628 vs 0.2627), with the same torch
+  2.14.0 / tabicl 2.1.1 / 90 locked packages, the MATH attention backend active and every determinism flag set. Three earlier
+  hosted runs (96m3, 96m4, the record) agreed exactly; this one did not, so a residual non-deterministic step remains in tabicl's
+  fp16 fine-tuning on the T4 that `torch.use_deterministic_algorithms(True)` does not flag. The selection cannot flip on drift of
+  this size: the exported system is the pretrained checkpoint, which fine-tuning never touches, and the closest configuration is
+  about 0.0006 better on validation against the 0.005 tolerance. Owner ruling (2026-10-20): disclose and merge; the remaining op
+  is tracked as a follow-up. The artifact ZIP (`2dc82d55…`) is the first written by the deterministic exporter.
+- **Fresh-test looks so far:** two, the evaluation of record and reproduction 1 above. No CPU development look was taken: the
+  fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
+
+**Local-path redaction of the reproduction evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
+
+| File (under `execution-evidence/2026-10-20-fb16f81/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_fb16f81_colab-cli-t4.ipynb` | `da2513c2a2a4acfb840605d6bea0782577a0da986b3eccc8ee1eb6a1de807d0b` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_fb16f81_colab-cli-t4_run_summary.json` | `90c9eb7a463313dd134cdf8678abd42582f2f2194d9b29ab29aeecad78b2fad0` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_fb16f81_colab-cli-t4_exec.log` | `e3a3cd18bc5d9bbda8f22dfc2603fe9a00b3771b297eb0b2703dfdb7d32e21b1` | `e36f4c883b506b9adc5cac7a0d8eb992bf46549fe9661dbbb921bf795f5b1a3d` (2 replacements) |
+| `tabiclv2_classifier_colab_fb16f81_colab-cli-t4_suite.log` | `5a9cc6d9a158961dcfe6d60f2e9c890b8baa3edebbf18d6d3ea6ac358649f8ab` | `372fd48d5459ba9a92e7165340120ee3d95aff81fc383c13fb320d6a4d283a6a` (4 replacements) |
 
 **Local-path redaction of the 2026-10-20 evidence.** Local run-directory paths were replaced by `<local-run-dir>/` before the first
 commit. SHA-256 captured → committed:
