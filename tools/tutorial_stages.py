@@ -88,10 +88,68 @@ DETERMINISM_WARNING = re.compile(r"determinis|non-?deterministic|memory.efficien
 _CAUGHT_WARNINGS: list = []  # the warnings recorded by the active deterministic_kernels() context
 REQUIRED_DEVICE = "Tesla T4"
 MASK_ENV = "DIMER_MASK_FRESH_TEST"
-# The first hosted T4 run under the pre-registered settings, once recorded in docs/release-verification.md (commit, blob, date).
-# While None, the first pre-registered scoring in a runtime is "pre-registered evaluation (this runtime)"; afterwards every
-# identical scoring in any runtime is a "reproduction".
-RECORDED_EVALUATION: dict[str, str] | None = None
+# The evaluation of record: the first hosted T4 run under the pre-registered settings (amendment 2), recorded in
+# docs/release-verification.md with its evidence. Because a record exists, every pre-registered scoring of the fresh test, the
+# first in a new runtime included, is a "reproduction" and prints matches_record / differs against the printed values below.
+# The record kept the pretrained model, which is also what a CPU run (no grid) exports.
+RECORDED_SELECTION: str = "pretrained"
+RECORDED_EVALUATION: dict[str, Any] | None = {
+    "label": "pre-registered evaluation (this runtime)",
+    "date": "2026-10-20",
+    "runner": "Colab CLI sequential execution, fresh hosted Tesla T4 session",
+    "commit": "9ea0888d9df24a9568613ec9c51dd1fe65cea443",
+    "notebook_blob": "947feb162abbf8126a8579188268024da3ca3ba8",
+    "evidence": "docs/execution-evidence/2026-10-20-9ea0888/",
+    "device": "Tesla T4",
+    "selected": RECORDED_SELECTION,
+    "grid_hash": "4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692",
+    "reading": {
+        "primary.delta": 0.0,
+        "primary.ci95": [0.0, 0.0],
+        "primary.verdict": "same model (Δ = 0)",
+        "accuracy.pretrained": 0.8993,
+        "accuracy.pretrained_wilson95": [0.8831, 0.9136],
+        "accuracy.selected": 0.8993,
+        "accuracy.difference": 0.0,
+        "roc_auc.pretrained": 0.95,
+        "roc_auc.selected": 0.95,
+        "sensitivity.excluded_rows": 4,
+        "sensitivity.n": 1496,
+        "sensitivity.primary.delta": 0.0,
+        "sensitivity.primary.verdict": "same model (Δ = 0)",
+    },
+}
+
+
+def printed_reading(reading: dict[str, Any], sensitivity: dict[str, Any]) -> dict[str, Any]:
+    """The fresh-test values in the form the record stores them (rounded as printed)."""
+    r = rounded({"reading": reading, "sensitivity": sensitivity})
+    rd, sv = r["reading"], r["sensitivity"]
+    return {
+        "primary.delta": rd["primary"]["delta"],
+        "primary.ci95": list(rd["primary"]["ci95"]),
+        "primary.verdict": rd["primary"]["verdict"],
+        "accuracy.pretrained": rd["accuracy"]["pretrained"],
+        "accuracy.pretrained_wilson95": list(rd["accuracy"]["pretrained_wilson95"]),
+        "accuracy.selected": rd["accuracy"]["selected"],
+        "accuracy.difference": rd["accuracy"]["difference"],
+        "roc_auc.pretrained": rd["roc_auc"]["pretrained"],
+        "roc_auc.selected": rd["roc_auc"]["selected"],
+        "sensitivity.excluded_rows": sv["excluded_rows"],
+        "sensitivity.n": sv["n"],
+        "sensitivity.primary.delta": sv["primary"]["delta"],
+        "sensitivity.primary.verdict": sv["primary"]["verdict"],
+    }
+
+
+def compare_with_record(selected: str, grid_hash_value: str, device: str | None, values: dict[str, Any]) -> dict[str, Any] | None:
+    """A reproduction against the evaluation of record: the fields that differ, by name. None when no record exists."""
+    if RECORDED_EVALUATION is None:
+        return None
+    differs = [k for k, v in (("selected", selected), ("grid_hash", grid_hash_value), ("device", device)) if RECORDED_EVALUATION.get(k) != v]
+    recorded = RECORDED_EVALUATION.get("reading") or {}
+    differs += [f"reading.{k}" for k in recorded if values.get(k) != recorded[k]]
+    return {"reproduction_of": f"{RECORDED_EVALUATION.get('date')} hosted T4, commit {str(RECORDED_EVALUATION.get('commit'))[:7]}", "matches_record": not differs, "differs": differs}
 TEST_LOOKS = ("pre-registered evaluation (this runtime)", "reproduction", "not scored (exploratory)")
 FRESH_DIR = "fresh-test"  # under outputs/; not removed by clear_outputs, so a re-run in the same runtime is a reproduction
 
@@ -966,7 +1024,9 @@ def stage_fresh_test(run: Run) -> None:
     same = cond["active_mode"] == "pretrained"
     reading = fresh_test_reading(y, p_pre, p_sel, classes, same_model=same)
     sensitivity = fresh_test_reading(y, p_pre, p_sel, classes, same_model=same, exclude=duplicated)
-    report = {"test_look": label, "settings_differing": [], "preregistered": True, "recorded_evaluation": RECORDED_EVALUATION, "checks": checks, "selected": {"mode": cond["active_mode"], "selection": cond["selection"]}, "grid_hash": cond["grid_hash"], "device": cond.get("device_name"), "determinism": (cond.get("settings") or {}).get("determinism"), "fresh_test": {"rows": len(y), "member_sha256": MAGIC_MEMBERS["test.csv"], "row_ids_sha256": MAGIC_ROW_IDS_SHA256["test"], "max_probability_row_sum_deviation": deviation}, **reading, "sensitivity_without_duplicated_rows": {"excluded_rows": int(duplicated.sum()), **{k: sensitivity[k] for k in ("n", "primary")}}, "power": "planning estimates: a single accuracy on 1,500 rows about ±0.017 (Wilson); a paired accuracy difference about ±0.011 at 5 % discordance; a paired log-loss difference about ±0.017 (pessimistic proxy)", "validation": validation, "exploratory_readout": cond.get("exploratory_readout"), "notebook_source": json.loads((run.root / "source.json").read_text(encoding="utf-8")) if (run.root / "source.json").is_file() else {}}
+    sens = {"excluded_rows": int(duplicated.sum()), **{k: sensitivity[k] for k in ("n", "primary")}}
+    comparison = compare_with_record(cond["active_mode"], cond["grid_hash"], cond.get("device_name"), printed_reading(reading, sens)) if label == TEST_LOOKS[1] else None
+    report = {"test_look": label, "settings_differing": [], "preregistered": True, "recorded_evaluation": RECORDED_EVALUATION, "checks": checks, "selected": {"mode": cond["active_mode"], "selection": cond["selection"]}, "grid_hash": cond["grid_hash"], "device": cond.get("device_name"), "determinism": (cond.get("settings") or {}).get("determinism"), "fresh_test": {"rows": len(y), "member_sha256": MAGIC_MEMBERS["test.csv"], "row_ids_sha256": MAGIC_ROW_IDS_SHA256["test"], "max_probability_row_sum_deviation": deviation}, **reading, "sensitivity_without_duplicated_rows": sens, "comparison_with_record": comparison, "power": "planning estimates: a single accuracy on 1,500 rows about ±0.017 (Wilson); a paired accuracy difference about ±0.011 at 5 % discordance; a paired log-loss difference about ±0.017 (pessimistic proxy)", "validation": validation, "exploratory_readout": cond.get("exploratory_readout"), "notebook_source": json.loads((run.root / "source.json").read_text(encoding="utf-8")) if (run.root / "source.json").is_file() else {}}
     out = first_report if first else fresh / f"{STEM}_fresh_test_reproduction_{next_index(fresh, 'reproduction')}.json"
     atomic_write_json(out, report)  # the look counts from here: the report is written
     if not marker.exists():  # outside outputs/: deleting outputs/ cannot make a later look claim to be the first
@@ -975,6 +1035,8 @@ def stage_fresh_test(run: Run) -> None:
     atomic_write_json(ledger_path, {"entries": entries})
     print({"test_look": label, "written": f"outputs/{FRESH_DIR}/{out.name}", "selected": cond["active_mode"]})
     print(rounded({"primary": reading["primary"], "accuracy": reading["accuracy"], "roc_auc": reading["roc_auc"], "sensitivity_without_duplicated_rows": report["sensitivity_without_duplicated_rows"]}))
+    if comparison is not None:
+        print(comparison)
     print("Scored only under the pre-registered settings; see docs/release-verification.md for the recorded evaluation and its reproductions.")
 
 

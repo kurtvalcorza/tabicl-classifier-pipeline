@@ -34,6 +34,7 @@ def _load(name: str, path: Path):
 
 S = _load("r96_tutorial_stages", ROOT / "tools" / "tutorial_stages.py")
 FIRST, REPRO, EXPLORATORY = S.TEST_LOOKS
+RECORD = S.RECORDED_EVALUATION  # the fixture below sets it to None; tests of the record restore it
 
 
 def _grid() -> list[dict]:
@@ -225,7 +226,7 @@ def test_grid_is_the_preregistered_one_and_takes_real_steps() -> None:
     assert S.DETERMINISM == {"CUBLAS_WORKSPACE_CONFIG": ":4096:8", "cudnn_deterministic": True, "cudnn_benchmark": False, "deterministic_algorithms": True, "warn_only": False, "seed": 42, "sdpa_backend": "MATH", "flash_attn3": False}
     assert S.MAGIC_ROW_IDS_SHA256["test"] == "8847cab4e87c8ff30dd6a27045464f7891b2e14dd39149c5e5648348f190f3e4"
     assert hashlib.sha256(ZIP.read_bytes()).hexdigest() == S.MAGIC_SHA256
-    assert S.MAGIC_COMMIT in S.MAGIC_URL and S.RECORDED_EVALUATION is None
+    assert S.MAGIC_COMMIT in S.MAGIC_URL and S.RECORDED_EVALUATION is not None
     body = (ROOT / "tools" / "tutorial_stages.py").read_text(encoding="utf-8")
     assert "warn_only=True" not in body and "use_lr_scheduler=c[\"use_lr_scheduler\"]" in body
 
@@ -540,3 +541,54 @@ def test_the_artifact_zip_digest_depends_only_on_member_names_and_bytes(tmp_path
     assert digests[0] == digests[1]
     body = (ROOT / "tools" / "tutorial_stages.py").read_text(encoding="utf-8")
     assert "make_archive(" not in body
+
+
+# ---------------------------------------------------------------- evaluation of record (2026-10-20, hosted T4, 9ea0888)
+
+
+def test_the_evaluation_of_record_is_the_hosted_t4_run_and_keeps_pretrained() -> None:
+    rec = S.RECORDED_EVALUATION
+    assert rec["commit"] == "9ea0888d9df24a9568613ec9c51dd1fe65cea443" and rec["notebook_blob"] == "947feb162abbf8126a8579188268024da3ca3ba8"
+    assert rec["date"] == "2026-10-20" and rec["device"] == "Tesla T4" and rec["label"] == FIRST
+    assert rec["grid_hash"] == "4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692"
+    assert S.RECORDED_SELECTION == "pretrained" and rec["selected"] == "pretrained"
+    r = rec["reading"]
+    assert r["primary.delta"] == 0.0 and r["primary.ci95"] == [0.0, 0.0] and r["primary.verdict"] == "same model (Δ = 0)"
+    assert r["accuracy.pretrained"] == 0.8993 and r["accuracy.pretrained_wilson95"] == [0.8831, 0.9136] and r["roc_auc.selected"] == 0.95
+    assert r["sensitivity.excluded_rows"] == 4 and r["sensitivity.n"] == 1496 and r["sensitivity.primary.verdict"] == "same model (Δ = 0)"
+    evidence = ROOT / rec["evidence"]
+    transcription = json.loads((evidence / "fresh_test_report_transcription.json").read_text(encoding="utf-8"))
+    printed = transcription["printed_reading"]
+    assert transcription["commit"] == rec["commit"] and transcription["grid_hash"] == rec["grid_hash"]
+    assert printed["primary"]["delta"] == r["primary.delta"] and printed["primary"]["verdict"] == r["primary.verdict"]
+    assert printed["accuracy"]["pretrained"] == r["accuracy.pretrained"] and printed["roc_auc"]["pretrained"] == r["roc_auc.pretrained"]
+    assert printed["sensitivity_without_duplicated_rows"]["n"] == r["sensitivity.n"]
+    assert (evidence / "tabiclv2_classifier_colab_9ea0888_colab-cli-t4.ipynb").is_file()
+
+
+def test_a_new_runtime_is_a_reproduction_and_prints_matches_record(tmp_path, scored, monkeypatch, capsys) -> None:
+    run = _setup(tmp_path)
+    # The stand-in grid has its own (pre-checked) hash; give the record that hash so only the reading can differ.
+    monkeypatch.setattr(S, "RECORDED_EVALUATION", {**RECORD, "grid_hash": run.read_state("condition.json", "test")["grid_hash"]})
+    S.stage_fresh_test(run)
+    out = capsys.readouterr().out
+    assert not (_fresh(run) / f"{S.STEM}_fresh_test_report.json").exists()
+    repro = json.loads((_fresh(run) / f"{S.STEM}_fresh_test_reproduction_1.json").read_text(encoding="utf-8"))
+    assert repro["test_look"] == REPRO and "'matches_record'" in out
+    comparison = repro["comparison_with_record"]
+    assert comparison["reproduction_of"] == "2026-10-20 hosted T4, commit 9ea0888"
+    # The stand-in's probabilities are not the model's, so its accuracy and AUC differ from the record and are named; the
+    # selection, grid hash, device and the "same model" reading match.
+    assert comparison["matches_record"] is False
+    assert {"selected", "grid_hash", "device", "reading.primary.delta", "reading.primary.verdict", "reading.sensitivity.n"}.isdisjoint(comparison["differs"])
+    assert "reading.accuracy.pretrained" in comparison["differs"]
+
+
+def test_compare_with_record_matches_the_recorded_values_and_names_each_difference(monkeypatch) -> None:
+    rec = S.RECORDED_EVALUATION
+    same = S.compare_with_record("pretrained", rec["grid_hash"], "Tesla T4", dict(rec["reading"]))
+    assert same == {"reproduction_of": "2026-10-20 hosted T4, commit 9ea0888", "matches_record": True, "differs": []}
+    changed = S.compare_with_record("fine-tuned", "0" * 64, "Tesla T4", {**rec["reading"], "primary.delta": -0.01})
+    assert changed["matches_record"] is False and changed["differs"] == ["selected", "grid_hash", "reading.primary.delta"]
+    monkeypatch.setattr(S, "RECORDED_EVALUATION", None)
+    assert S.compare_with_record("pretrained", rec["grid_hash"], "Tesla T4", {}) is None

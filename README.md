@@ -14,7 +14,7 @@
 
 ## Release status
 
-**Candidate.** Static/unit checks do not constitute clean-runtime notebook evidence. The previous repository-installing pair was executed by CI through real kernels. Of the standalone pair, only an earlier E2E blob has a hosted run (Kaggle T4, 2026-09-14); the current blobs have no clean-runtime run recorded yet. Complete `docs/release-verification.md` against the exact release revision before calling either notebook release-grade.
+**Candidate.** Static/unit checks do not constitute clean-runtime notebook evidence. The previous repository-installing pair was executed by CI through real kernels. The E2E blob `947feb16` (commit `9ea0888`) has a hosted Colab T4 run recorded on 2026-10-20: the MAGIC fresh-test evaluation of record, which kept the pretrained model and read "same model (Δ = 0)" (accuracy 0.8993, Wilson 95 % 0.8831–0.9136, ROC AUC 0.95; `docs/release-verification.md`). Blobs regenerated after it carry that record, label every fresh-test scoring a reproduction, and need their own hosted runs. Complete `docs/release-verification.md` against the exact release revision before calling either notebook release-grade.
 
 A DIMER pipeline that fine-tunes [TabICLv2](https://huggingface.co/jingang/TabICL), a pretrained
 tabular foundation model, on your own tabular-classification dataset. You supply a table of rows
