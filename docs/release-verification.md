@@ -227,8 +227,29 @@ reads nothing.
   102,793,443 bytes) is published unchanged as the release asset of tag `sample-artifact-magic-v1` (target `383ca04`), whose
   notes name this run (SART8). It is the pinned default artifact of the external-artifact section (Section 10) from the
   Notebook Spec 3.0 fold on; it is not evidence for the migrated notebook, which needs its own hosted run.
-- **Fresh-test looks so far:** three, the evaluation of record, reproduction 1 and reproduction 2 above. No CPU development look was taken: the
+- **Reproduction 3 and the first hosted run of the migrated notebook (hosted Colab T4, 2026-10-21, `1bca212` / blob
+  `822549fb`, Notebook Spec 3.0).** The default path of the folded E2E notebook on PR #29, run by the Colab CLI (`colab exec -f`)
+  on a fresh hosted T4 session, started 2026-10-21T23:20:35Z, wall 397.8 s, exit 0, input unchanged; executed cell sources
+  equal blob `822549fb` (48 cells), verdict PASS. Evidence:
+  [`execution-evidence/2026-10-21-1bca212/`](execution-evidence/2026-10-21-1bca212/). The fresh test is labelled
+  `reproduction`, selects `pretrained` and repeats every reported result; like reproductions 1 and 2 it differs from the record
+  only in `grid_hash` (issue #28). **Section 10 (external artifact) ran end to end on the default path:** it downloaded the
+  pinned release asset of tag `sample-artifact-magic-v1`, verified SHA-256
+  `2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c` before extraction, confirmed the checkpoint binding,
+  rebuilt the classifier from the files alone, scored the sample MAGIC rows and wrote
+  `outputs/external_artifact/tabiclv2_classifier_external_predictions.csv` and `..._external_result.json` (printed in the
+  executed notebook; the files stayed on the released VM). This is the second pass of §32.2 for this pipeline.
+- **Fresh-test looks so far:** four, the evaluation of record and reproductions 1–3 above. No CPU development look was taken: the
   fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
+
+**Local-path redaction of the reproduction 3 evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
+
+| File (under `execution-evidence/2026-10-21-1bca212/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_1bca212_colab-cli-t4.ipynb` | `9703397cc8e3ceaf45f5b80258e396c66ebdfa0c1a28084f42e698ae4f352a9e` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_1bca212_colab-cli-t4_run_summary.json` | `5e31302c63f219c658d1f663baf1a5f06d54b8f571b9f20c3ebea96dbfdad27a` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_1bca212_colab-cli-t4_exec.log` | `00cc231d30ce86fa7527ae1a1591646e7ead49299ba1c1461edd37c0753add3b` | `153da19297dde235c9b7b8863924e69e46faf76245d84fba3f5665bdee29565e` (2 replacements) |
+| `tabiclv2_classifier_colab_1bca212_colab-cli-t4_suite.log` | `037acf788819871be31f08b74be34fa8afb8225edec5d8ee22aaa09760968cb4` | `aeffd16c551f0d329b0ad569b157b601bc7f8b1f60ff88b28cc81318229e206a` (4 replacements) |
 
 **Local-path redaction of the reproduction 2 evidence.** Local paths were replaced by `<local-run-dir>/` before the first
 commit. The 102,793,443-byte artifact ZIP is not committed here; it is the release asset.
