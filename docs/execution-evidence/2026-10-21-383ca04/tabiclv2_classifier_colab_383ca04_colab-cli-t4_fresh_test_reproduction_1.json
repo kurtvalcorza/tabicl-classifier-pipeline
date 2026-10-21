@@ -1,0 +1,192 @@
+{
+  "test_look": "reproduction",
+  "settings_differing": [],
+  "preregistered": true,
+  "recorded_evaluation": {
+    "label": "pre-registered evaluation (this runtime)",
+    "date": "2026-10-20",
+    "runner": "Colab CLI sequential execution, fresh hosted Tesla T4 session",
+    "commit": "9ea0888d9df24a9568613ec9c51dd1fe65cea443",
+    "notebook_blob": "947feb162abbf8126a8579188268024da3ca3ba8",
+    "evidence": "docs/execution-evidence/2026-10-20-9ea0888/",
+    "device": "Tesla T4",
+    "selected": "pretrained",
+    "grid_hash": "4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692",
+    "reading": {
+      "primary.delta": 0.0,
+      "primary.ci95": [
+        0.0,
+        0.0
+      ],
+      "primary.verdict": "same model (Δ = 0)",
+      "accuracy.pretrained": 0.8993,
+      "accuracy.pretrained_wilson95": [
+        0.8831,
+        0.9136
+      ],
+      "accuracy.selected": 0.8993,
+      "accuracy.difference": 0.0,
+      "roc_auc.pretrained": 0.95,
+      "roc_auc.selected": 0.95,
+      "sensitivity.excluded_rows": 4,
+      "sensitivity.n": 1496,
+      "sensitivity.primary.delta": 0.0,
+      "sensitivity.primary.verdict": "same model (Δ = 0)"
+    }
+  },
+  "checks": {
+    "grid_complete": true,
+    "grid_hash_matches": true,
+    "selected_model_matches": true,
+    "fresh_pool_digest": true
+  },
+  "selected": {
+    "mode": "pretrained",
+    "selection": "validation:log_loss; pretrained kept (no config beat 0.2634 by more than 0.005)"
+  },
+  "grid_hash": "2aa9e0cd52eec49e3a2abcb46ba7b1c43af28fc48b11651649f6a60f7dc63b73",
+  "device": "Tesla T4",
+  "determinism": {
+    "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+    "cudnn_deterministic": true,
+    "cudnn_benchmark": false,
+    "deterministic_algorithms": true,
+    "warn_only": false,
+    "seed": 42,
+    "sdpa_backend": "MATH",
+    "flash_attn3": false
+  },
+  "fresh_test": {
+    "rows": 1500,
+    "member_sha256": "62c3eff6bb323ac150ec60eb4f26d5ed92ce20fe79ed3baa83f32b76e4482b51",
+    "row_ids_sha256": "8847cab4e87c8ff30dd6a27045464f7891b2e14dd39149c5e5648348f190f3e4",
+    "max_probability_row_sum_deviation": 6.705522537231445e-08
+  },
+  "n": 1500,
+  "primary": {
+    "endpoint": "fresh-test log loss difference, selected - pretrained",
+    "delta": 0.0,
+    "ci95": [
+      0.0,
+      0.0
+    ],
+    "verdict": "same model (Δ = 0)",
+    "practical_delta": 0.005,
+    "bootstrap": {
+      "seed": 20261019,
+      "n_boot": 10000
+    }
+  },
+  "log_loss": {
+    "pretrained": 0.25829852626697675,
+    "selected": 0.25829852626697675
+  },
+  "accuracy": {
+    "pretrained": 0.8993333333333333,
+    "pretrained_wilson95": [
+      0.8830718553314915,
+      0.9135546726345544
+    ],
+    "selected": 0.8993333333333333,
+    "selected_wilson95": [
+      0.8830718553314915,
+      0.9135546726345544
+    ],
+    "difference": 0.0,
+    "difference_ci95": [
+      0.0,
+      0.0
+    ]
+  },
+  "roc_auc": {
+    "pretrained": 0.9499893714738158,
+    "selected": 0.9499893714738158
+  },
+  "sensitivity_without_duplicated_rows": {
+    "excluded_rows": 4,
+    "n": 1496,
+    "primary": {
+      "endpoint": "fresh-test log loss difference, selected - pretrained",
+      "delta": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "verdict": "same model (Δ = 0)",
+      "practical_delta": 0.005,
+      "bootstrap": {
+        "seed": 20261019,
+        "n_boot": 10000
+      }
+    }
+  },
+  "comparison_with_record": {
+    "reproduction_of": "2026-10-20 hosted T4, commit 9ea0888",
+    "matches_record": false,
+    "differs": [
+      "grid_hash"
+    ]
+  },
+  "power": "planning estimates: a single accuracy on 1,500 rows about ±0.017 (Wilson); a paired accuracy difference about ±0.011 at 5 % discordance; a paired log-loss difference about ±0.017 (pessimistic proxy)",
+  "validation": {
+    "pretrained": {
+      "accuracy": 0.903,
+      "balanced_accuracy": 0.8803836980920314,
+      "f1_weighted": 0.9014880391141555,
+      "log_loss": 0.2633526488495452,
+      "roc_auc": 0.9463581123737372
+    },
+    "selected_config_candidate": {
+      "accuracy": 0.902,
+      "balanced_accuracy": 0.878314393939394,
+      "f1_weighted": 0.9003422885572139,
+      "log_loss": 0.2628741745480489,
+      "roc_auc": 0.9465269009539843
+    },
+    "selection": "validation:log_loss; pretrained kept (no config beat 0.2634 by more than 0.005)"
+  },
+  "exploratory_readout": {
+    "label": "exploratory readout, validation only (never the fresh test)",
+    "config": "C3",
+    "last_epoch_val": {
+      "accuracy": 0.901,
+      "balanced_accuracy": 0.8768939393939394,
+      "f1_weighted": 0.8992809524294487,
+      "log_loss": 0.2626747939516243,
+      "roc_auc": 0.9465597818462402
+    },
+    "param_delta_l2_last_epoch": 0.05916783203536733,
+    "pretrained_val": {
+      "accuracy": 0.903,
+      "balanced_accuracy": 0.8803836980920314,
+      "f1_weighted": 0.9014880391141555,
+      "log_loss": 0.2633526488495452,
+      "roc_auc": 0.9463581123737372
+    },
+    "val_log_loss_difference_last_minus_pretrained": -0.000677854897920882
+  },
+  "notebook_source": {
+    "repository": "kurtvalcorza/tabicl-classifier-pipeline",
+    "revision": "bc7c606347847e3f9f7049183a39ba31699f9b90",
+    "generator": "build_notebook.py/3.0-tabular",
+    "notebook_spec": "2.5",
+    "files": {
+      "src/tabicl_classifier_pipeline/__init__.py": "c2b8cd9a177ac0c762db0d38417bf238f99160e0bf301c9a7c7c740e5694bdbb",
+      "src/tabicl_classifier_pipeline/api.py": "79bfc9202658032bd4194ef16911aaa9a0339f9ff5cd461e3e6075f1351c8d48",
+      "tutorial_stages.py": "9375a44d4a03d67e6a9e34dd1d92b65a69c8ad0db91dbf14cdf2b010d28389a7",
+      "requirements.txt": "c364e6a779ced5aa08987476ab86a4d7d1910f2426b8b94d826735c8c8d32e13",
+      "weights/tabicl-classifier-v2/dimer-base-manifest.json": "9770b17efe4c06f1c667c74ce720c6eeb80d5417717b1afd96b1dafd934b03b7",
+      "sample-bundle/SAMPLE_BUNDLE.json": "68adfae1f8681701b1ed0f0f9fdd01555b9cb167202dc1de83e294b85ccedcb0",
+      "LICENSE": "f35c084e579356a91e0c417d2946a9fbc075c1fd0908d5fadebee72f4d482d0c"
+    },
+    "sources": {
+      "src/tabicl_classifier_pipeline/__init__.py": "src/tabicl_classifier_pipeline/__init__.py",
+      "src/tabicl_classifier_pipeline/api.py": "src/tabicl_classifier_pipeline/api.py",
+      "tutorial_stages.py": "tools/tutorial_stages.py",
+      "requirements.txt": "tutorials/requirements-colab.lock.txt",
+      "weights/tabicl-classifier-v2/dimer-base-manifest.json": "weights/tabicl-classifier-v2/dimer-base-manifest.json",
+      "sample-bundle/SAMPLE_BUNDLE.json": "examples/sample-bundle/SAMPLE_BUNDLE.json",
+      "LICENSE": "LICENSE"
+    }
+  }
+}

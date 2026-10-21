@@ -214,8 +214,32 @@ reads nothing.
   this size: the exported system is the pretrained checkpoint, which fine-tuning never touches, and the closest configuration is
   about 0.0006 better on validation against the 0.005 tolerance. Owner ruling (2026-10-20): disclose and merge; the remaining op
   is tracked as a follow-up. The artifact ZIP (`2dc82d55…`) is the first written by the deterministic exporter.
-- **Fresh-test looks so far:** two, the evaluation of record and reproduction 1 above. No CPU development look was taken: the
+- **Reproduction 2 and the producing run of the sample artifact (hosted Colab T4, 2026-10-21, `383ca04` / blob `baf03478`).**
+  The default path of `tutorials/tabiclv2_classifier_colab.ipynb` at `main` `383ca04` (blob `baf03478`), run by the Colab CLI
+  (`colab exec -f`, 0.7.4) on a fresh hosted T4 session, started 2026-10-21T22:56:07Z, wall 363.3 s, exit 0, input unchanged,
+  12/12 code cells, verdict PASS. Evidence:
+  [`execution-evidence/2026-10-21-383ca04/`](execution-evidence/2026-10-21-383ca04/). It is labelled `reproduction` (the
+  second in a new runtime; the runtime-local report file is named `..._fresh_test_reproduction_1.json`), selects `pretrained`
+  and reproduces every reported result: fresh-test difference 0.0, 95 % CI [0, 0], **same model (Δ = 0)**; accuracy 0.8993
+  (Wilson [0.8831, 0.9136]). Like reproduction 1 it prints `matches_record: False`, `differs: ['grid_hash']` (`2aa9e0cd…`,
+  the same value as reproduction 1; the known residual drift, issue #28); the verdict is unchanged. Its deterministic export
+  `outputs/tabiclv2_classifier_artifact.zip` (SHA-256 `2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c`,
+  102,793,443 bytes) is published unchanged as the release asset of tag `sample-artifact-magic-v1` (target `383ca04`), whose
+  notes name this run (SART8). It is the pinned default artifact of the external-artifact section (Section 10) from the
+  Notebook Spec 3.0 fold on; it is not evidence for the migrated notebook, which needs its own hosted run.
+- **Fresh-test looks so far:** three, the evaluation of record, reproduction 1 and reproduction 2 above. No CPU development look was taken: the
   fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
+
+**Local-path redaction of the reproduction 2 evidence.** Local paths were replaced by `<local-run-dir>/` before the first
+commit. The 102,793,443-byte artifact ZIP is not committed here; it is the release asset.
+
+| File (under `execution-evidence/2026-10-21-383ca04/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4.ipynb` | `4dd5ebc255d3b6319be31d27cba68241d1ffd2798e0e70cc0ee9fc4c6af398c6` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4_exec.log` | `b4f51655caa5ac961b065cccdf32e0436ac32a2ce85ff4d2316636cf72dd1dbd` | `df81c9a2c9b1aa405d30df11a5f23de003f4ce9ece0f00ce9c76071e4ca58072` |
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4_run_summary.json` | `3705679994220e272ca2c8df59340a6910631d0de6e410a7f37bc6e372ec98b9` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4_fresh_test_reproduction_1.json` | `32e10e087964b11cad3a04d296441fc07294b837d6cb9522db6bb52c0003be89` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4_suite.log` | `bb50d38b0d8a9d19563680d4ffb9f98063ed5a48d8ee72efc79cbb22dd8514a8` | `a992ed43af67a6514c9db2065b5ed9bb90673a95d5de62e3061ac679893177ea` |
 
 **Local-path redaction of the reproduction evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
 
