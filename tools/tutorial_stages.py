@@ -77,7 +77,7 @@ MAGIC_FRESH_TEST_ROWS = 1500
 # SART9). It is pinned by URL and SHA-256 and never replaced; a changed artifact gets a new tag and a new pin (SART7,
 # SART11). The export of the current run is never used as the external artifact (XAS2).
 SAMPLE_ARTIFACT_TAG = "sample-artifact-magic-v1"
-SAMPLE_ARTIFACT_URL = f"https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/{SAMPLE_ARTIFACT_TAG}/tabiclv2_classifier_artifact.zip"
+SAMPLE_ARTIFACT_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip"  # literal: validators allow only this exact URL
 SAMPLE_ARTIFACT_SHA256 = "2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c"
 SAMPLE_ARTIFACT_PRODUCER = {
     "notebook": "tutorials/tabiclv2_classifier_colab.ipynb (default path: MAGIC Gamma Telescope sample)",

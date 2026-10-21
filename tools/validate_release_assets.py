@@ -122,7 +122,7 @@ NOTEBOOKS = {
             'metrics = {"selectionMetric": cond["eval_metric"], "pretrainedHoldout": cond["pretrained_holdout"], "fineTunedHoldout": cond["candidate_holdout"]',
             '"payloadFiles": ["checkpoints/best.ckpt", "training_context.parquet"]',
             "Trusted digest of this export",
-            'SAMPLE_ARTIFACT_URL = f"https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/{SAMPLE_ARTIFACT_TAG}/tabiclv2_classifier_artifact.zip"',
+            'SAMPLE_ARTIFACT_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip"',
             'SAMPLE_ARTIFACT_SHA256 = "',
             'EXTERNAL_DIR = "external_artifact"',
             'zip_path = fetch_pinned_artifact(run.root / "inputs" / "external_artifact.zip", SAMPLE_ARTIFACT_URL, SAMPLE_ARTIFACT_SHA256)',
@@ -276,8 +276,8 @@ ISOLATION_MARKERS = (
 # Patterns that must never appear in tutorial code (comment-stripped), in any kernel cell or the stage runner.
 FORBIDDEN_PATTERNS = (
     ("credential in clone URL", re.compile(r"https://[^/'\"\s]*@github\.com/|x-access-token:")),
-    # A pinned release-asset download (SART6) is not a clone; any other github.com/kurtvalcorza reference is.
-    ("repository clone (ST1)", re.compile(r"\bgit\b[^\n]*\bclone\b|github\.com/kurtvalcorza(?!/[A-Za-z0-9._-]+/releases/download/)")),
+    # github.com/kurtvalcorza references are checked by disallowed_own_references (ST1): only the exact pinned asset URL.
+    ("repository clone (ST1)", re.compile(r"\bgit\b[^\n]*\bclone\b")),
     ("mutable git dependency (MOD14)", re.compile(r"git\+https?://(?![^\n]*@[0-9a-f]{40}\b)")),
     ("editable self-install", re.compile(r"""['"](?:-e|--editable)['"]|pip install (?:-e|--editable)\b""")),
     ("mutable model reference (MOD14)", re.compile(r"revision\s*=\s*['\"](?:main|latest)['\"]")),
@@ -291,6 +291,31 @@ FORBIDDEN_PATTERNS = (
 )
 # In-kernel installs (TDC-M1): no pip into the notebook kernel, and no restart instruction anywhere.
 KERNEL_INSTALL = re.compile(r"['\"]-m['\"]\s*,\s*['\"]pip['\"]|^\s*[%!]\s*pip\b|['\"]pip install\b|\bpip\.main\(", re.M)
+
+
+# ST1 / SART6: the only github.com/kurtvalcorza reference allowed anywhere in tutorial code is the exact pinned sample-artifact
+# URL of the external-artifact section, in the stage runner only. It is built here from the tag and compared whole: no prefix
+# match, and a reference holding "..", "%2e" (any case), "?" or "#" is refused even before the comparison.
+SAMPLE_ARTIFACT_TAG = "sample-artifact-magic-v1"
+PINNED_SAMPLE_ARTIFACT_URL = f"https://github.com/kurtvalcorza/{REPO_NAME}/releases/download/{SAMPLE_ARTIFACT_TAG}/tabiclv2_classifier_artifact.zip"
+_OWN_REFERENCE = re.compile(r"github\.com/kurtvalcorza", re.I)
+_REFERENCE_STOP = set(" \t\r\n'\"`<>()[]{},;\\")
+
+
+def disallowed_own_references(text: str, allowed: tuple[str, ...] = ()) -> list[str]:
+    """Every github.com/kurtvalcorza reference in ``text`` that is not exactly one of ``allowed`` (whole token)."""
+    bad = []
+    for match in _OWN_REFERENCE.finditer(text):
+        start, end = match.start(), match.end()
+        while start > 0 and text[start - 1] not in _REFERENCE_STOP:
+            start -= 1
+        while end < len(text) and text[end] not in _REFERENCE_STOP:
+            end += 1
+        reference = text[start:end]
+        traversal = ".." in reference or "%2e" in reference.lower() or "?" in reference or "#" in reference
+        if traversal or reference not in allowed:
+            bad.append(reference)
+    return bad
 
 
 class ValidationError(AssertionError):
@@ -677,6 +702,8 @@ def _validate_notebook_content(path: Path, code_cells: list[tuple[int, str, ast.
         _check('f"' + name in runner_code, f"{path.name}: stage runner must export {name.format(STEM=stem)}")
     present = [label for label, pattern in FORBIDDEN_PATTERNS if pattern.search(kernel) or pattern.search(runner_code)]
     _check(not present, f"{path.name}: forbidden/insecure source: {present}")
+    bad_refs = disallowed_own_references(kernel) + disallowed_own_references(runner_code, (PINNED_SAMPLE_ARTIFACT_URL,))
+    _check(not bad_refs, f"{path.name}: repository reference other than the exact pinned sample-artifact URL (ST1): {bad_refs}")
     leaked = [m for m in FORBIDDEN_OUTSIDE_MODULE if m in kernel]
     _check(not leaked, f"{path.name}: direct library use in the notebook's own cells (G2): {leaked}")
     _check(revision not in kernel, f"{path.name}: the model revision may appear only in the carried files")

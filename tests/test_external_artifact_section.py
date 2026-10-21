@@ -252,3 +252,50 @@ def test_predictions_and_provenance_go_to_outputs_external_artifact(tmp_path, mo
     result = json.loads((outputs / "external_artifact" / "tabiclv2_classifier_external_result.json").read_text())
     assert result["artifact"]["zip_sha256"] == PINNED_SHA256 and result["input"]["kind"] == "sample" and result["input"]["rows"] == 8
     assert [f["verdict"] for f in result["input_manifest"]["findings"] if f["input"] == "missing-column-probe"] == ["rejected"]
+
+
+# ---------------------------------------------------------------- ST1: only the exact pinned URL (PR #29 round 2)
+
+VALIDATOR = _load("xas_validate_release_assets", TOOLS / "validate_release_assets.py")
+_REPO = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline"
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        f"{_REPO}/releases/download/../../../archive/refs/heads/main.zip",
+        f"{_REPO}/releases/download/sample-artifact-magic-v1/../../../archive/refs/heads/main.zip",
+        f"{_REPO}/releases/download/%2e%2e/%2E%2E/archive/refs/heads/main.zip",
+        f"{_REPO}/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip?raw=1",
+        f"{_REPO}/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip#x",
+        "https://github.com/kurtvalcorza/swin-detection-pipeline/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip",
+        f"{_REPO}/releases/download/sample-artifact-magic-v2/tabiclv2_classifier_artifact.zip",
+        f"{_REPO}/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip.sig",
+        f"{_REPO}.git",
+        "https://GitHub.com/KurtValcorza/tabicl-classifier-pipeline/archive/refs/heads/main.zip",
+    ],
+    ids=["traversal", "tag-then-traversal", "pct2e", "query", "fragment", "other-repo", "other-tag", "suffix", "clone", "case"],
+)
+def test_st1_only_the_exact_pinned_release_asset_is_allowed(reference: str) -> None:
+    source = f'SAMPLE_ARTIFACT_URL = "{reference}"\n'
+    assert VALIDATOR.disallowed_own_references(source, (VALIDATOR.PINNED_SAMPLE_ARTIFACT_URL,)) == [reference]
+
+
+def test_st1_exact_pinned_url_passes_and_matches_the_runner() -> None:
+    assert VALIDATOR.PINNED_SAMPLE_ARTIFACT_URL == PINNED_URL == STAGES.SAMPLE_ARTIFACT_URL
+    assert STAGES.SAMPLE_ARTIFACT_TAG in PINNED_URL
+    source = f'SAMPLE_ARTIFACT_URL = "{PINNED_URL}"  # literal\n'
+    assert VALIDATOR.disallowed_own_references(source, (VALIDATOR.PINNED_SAMPLE_ARTIFACT_URL,)) == []
+    assert VALIDATOR.disallowed_own_references(source) == [PINNED_URL], "kernel cells allow no repository reference at all"
+
+
+def test_st1_real_notebook_passes_the_validator() -> None:
+    runner = VALIDATOR.carried_runner(E2E)
+    assert VALIDATOR.disallowed_own_references(runner, (VALIDATOR.PINNED_SAMPLE_ARTIFACT_URL,)) == []
+    VALIDATOR.validate_notebooks()
+
+
+def test_interpretation_precedes_the_section_which_closes_the_canonical_path() -> None:
+    heads = [_src(c).split("\n", 1)[0] for c in _cells() if c["cell_type"] == "markdown"]
+    at = {h.split(" ·")[0]: i for i, h in enumerate(heads) if h.startswith("## ")}
+    assert at["## 9. Export a DIMER-style serving bundle, then prove a fresh reload"] < at["## Interpretation and limits"] < at[SECTION_START.split(" ·")[0]] < at["## 11. Optional activity: a three-class table with 36 holdout rows"]
