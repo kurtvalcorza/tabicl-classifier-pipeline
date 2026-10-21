@@ -1,14 +1,25 @@
 # Release verification
 
-`tutorials/tabiclv2_classifier_colab.ipynb` (`E2E`) and `tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb`
-(`ARTIFACT-INFERENCE`) are **release candidates** until the exact notebook revisions have executed top-to-bottom in a
-clean supported runtime. Unit tests, JSON validation, code-cell compilation, and `tools/validate_release_assets.py` are
-necessary checks but are **not** runtime evidence under DIMER Notebook Specification 2.2. This file is the durable
-release-gate record for both notebooks.
+`tutorials/tabiclv2_classifier_colab.ipynb` (`E2E`) is a **release candidate** until the exact notebook revision has
+executed top-to-bottom in a clean supported runtime. Unit tests, JSON validation, code-cell compilation, and
+`tools/validate_release_assets.py` are necessary checks but are **not** runtime evidence under DIMER Notebook
+Specification 3.0. This file is the durable release-gate record.
+
+**Notebook Spec 3.0 fold (2026-10-22).** The notebook now declares Notebook Spec 3.0 and closes with the external-artifact
+section (Section 10, §19.1). The artifact-inference companion `tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb`,
+its template, its stage runner, `tests/test_companion_parity.py`, `tools/build_sample_bundle.py` and the Breast Cancer sample
+bundle `examples/sample-bundle/` were deleted (KND11; the bundle was assembled by a script that ran no model and described an
+earlier default, so it could not meet SART9/SART10). The section's default artifact is the release asset
+`tabiclv2_classifier_artifact.zip` of tag `sample-artifact-magic-v1` (SHA-256
+`2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c`, 102,793,443 bytes): the deterministic export of the recorded
+hosted T4 run of `383ca04` listed under *Recorded executions* (SART8). The section's own hosted evidence needs a run of the
+migrated notebook revision with that pin (the second pass of §32.2); until it is recorded here, the migrated notebook stays
+Candidate. Text below that describes the companion, its sample bundle or both notebooks describes revisions before the fold
+and is kept as history (REL14); the companion's execution evidence is not evidence for the migrated notebook.
 
 ## Automatic coverage (static, every pull request)
 
-CI runs `tools/validate_release_assets.py`, which checks, for each of the two notebooks:
+CI runs `tools/validate_release_assets.py`, which checks the notebook (the companion-specific items below applied before the Notebook Spec 3.0 fold; the same checks now bind the external-artifact section, plus the pinned URL and digest, the digest check before extraction, the SART10 contract check and the `outputs/external_artifact/` exports):
 
 - notebook JSON parses; every code cell compiles as plain Python (no `%`/`!` magics); no persisted outputs or
   execution counts; no unresolved placeholder markers; every code cell is preceded by an explanatory markdown cell;
@@ -57,12 +68,12 @@ CI runs `tools/validate_release_assets.py`, which checks, for each of the two no
   unsupported release-grade, production-readiness or benchmark claim;
 - `MODEL_CARD.md` front matter, single H1, required heading order, and the `## Checkpoint Provenance` section.
 
-CI also runs `ruff`, `tools/build_notebook.py --check` for both templates, `scripts/validate_colab_tutorial.py` (the
+CI also runs `ruff`, `tools/build_notebook.py --check`, `scripts/validate_colab_tutorial.py` (the
 repository's own checks: exact build backend, release lock files and their agreement with the pins, the carried hash lock,
 the fine-tune gate and its bounds, hardening markers), the two `scripts/test_*.py` classification suites and the offline
-unit suite (`tests/`: snapshot, role and weight-fact helpers, `test_notebook_parity.py`, `test_companion_parity.py`, and
+unit suite (`tests/`: snapshot, role and weight-fact helpers, `test_notebook_parity.py`, `test_external_artifact_section.py`, and
 `test_notebook_review_fixes.py`, which execs the notebooks' own cells with stand-ins and runs the model-free stages; no
-weights, no model). `tools/build_sample_bundle.py --check` reproduces `examples/sample-bundle/` byte for byte. These are
+weights, no model). These are
 source/provenance and unit checks. They are **not** execution evidence.
 
 ## Executor paths
@@ -101,14 +112,13 @@ Before changing the registry status from `Candidate` to `Release-grade`:
    - `outputs/tabiclv2_classifier_evaluation_report.json` with verdict `sample-sanity`;
    - eight held-out rows scored into `outputs/tabiclv2_classifier_predictions.csv`, and their unlabelled copy
      `outputs/tabiclv2_classifier_new_rows.csv`;
-   - the bundle `outputs/tabiclv2_classifier_artifact.zip` written with its SHA-256 printed and
-     `matches_pinned_sample_context` reported, reloaded in a fresh process with identical labels and equivalent
-     probabilities;
-6. in a **second** clean runtime, run the exact companion notebook revision with its defaults (the pinned sample bundle and
-   rows; no upload) and confirm `trusted_digest: verified`, `mode: pretrained`, the checkpoint binding, 341 context rows, and
-   the `not-measurable` report; then set `ARTIFACT_ZIP_PATH` to a copy of the E2E bundle, `EXPECTED_ZIP_SHA256` to the
-   digest the E2E run printed and `NEW_DATA_PATH` to its `..._new_rows.csv`, and confirm the same checks pass before
-   reconstruction;
+   - the bundle `outputs/tabiclv2_classifier_artifact.zip` written with its SHA-256 printed, reloaded in a fresh process
+     with identical labels and equivalent probabilities;
+6. in the same run, confirm the closing external-artifact section (Section 10): the pinned URL and SHA-256 printed before the
+   download, `trusted_digest: verified (pinned SAMPLE_ARTIFACT_SHA256)`, `zip_sha256` `2dc82d55…`, `mode: pretrained` with the
+   checkpoint bound to the base, `data_contract` matching the MAGIC default path, 3,000 context rows, eight MAGIC rows scored,
+   and `outputs/external_artifact/tabiclv2_classifier_external_predictions.csv` and `..._external_result.json` written. A
+   tampered or wrong pin must stop the run before extraction;
 7. verify the exports exist and the interpretation sections match the observed paths;
 8. record the notebook Git blob ids, commit, runtime (platform, Python, PyTorch, tabicl, device), model identifier and
    immutable revision, whether the model cache was clean, `restarted: false`, outcome, produced outputs and metrics, and any

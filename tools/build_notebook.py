@@ -26,7 +26,7 @@ per repository (identical across the six tabular in-context pipelines).
 Usage (from the repository root, or with --repo):
     python tools/build_notebook.py                      # write tutorials/<notebook_name>
     python tools/build_notebook.py --check              # exit 1 if the committed notebook differs (PAR3)
-    python tools/build_notebook.py --template tools/notebook_template_artifact_inference.py [--check]
+    python tools/build_notebook.py --template tools/notebook_template.py [--check]
     python tools/build_notebook.py --out PATH           # write elsewhere (review copies)
 """
 # ruff: noqa: E501  -- learner-facing prose and generated code are kept on single lines so they render readably

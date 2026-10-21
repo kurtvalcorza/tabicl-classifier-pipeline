@@ -805,7 +805,7 @@ def evaluation_report(
 
 
 # ---------------------------------------------------------------------------
-# Serving-artifact ZIP handling shared by the producer's fresh-reload check and the companion notebook.
+# Serving-artifact ZIP handling shared by the producer's fresh-reload check and the closing external-artifact section.
 # ---------------------------------------------------------------------------
 
 

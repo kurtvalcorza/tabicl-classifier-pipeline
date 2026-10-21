@@ -313,7 +313,7 @@ def test_probabilities_are_renormalised_and_the_deviation_is_bounded() -> None:
 def test_notebook_text_is_labelled_and_current() -> None:
     nb = json.loads(E2E.read_text(encoding="utf-8"))
     text = "\n".join("".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "markdown")
-    assert nb["metadata"]["dimer"]["notebook_spec"] == "2.5" and nb["metadata"]["dimer"]["notebook_kind"] == "TUTORIAL"
+    assert nb["metadata"]["dimer"]["notebook_spec"] == "3.0" and nb["metadata"]["dimer"]["notebook_kind"] == "TUTORIAL"
     assert nb["cells"][1]["cell_type"] == "markdown" and "".join(nb["cells"][1]["source"]).startswith("> **⚠️ Notice.**")
     for stale in ("No hosted run of this revision", "No recorded run of this revision", "the pipeline's production adaptation", "three epochs on the T4", "scored once"):
         assert stale not in text, stale  # R96-m1, R96-M1/M3, SCORE_ONCE_RULE item 6

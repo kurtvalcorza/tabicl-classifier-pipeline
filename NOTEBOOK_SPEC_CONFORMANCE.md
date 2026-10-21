@@ -1,6 +1,6 @@
 # DIMER Notebook Specification v1.0 conformance record
 
-This record applies to the release-grade tutorials in `tutorials/`.
+This record applies to the release-grade tutorials in `tutorials/` as they stood under v1.0; it is history. Under Notebook Spec 3.0 the artifact-inference companion was retired and its capability moved into the E2E notebook's external-artifact section (Section 10); see `tutorials/README.md`.
 
 | Notebook | Profile | Spec |
 |---|---|---|

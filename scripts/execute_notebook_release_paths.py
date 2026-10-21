@@ -14,14 +14,12 @@ from nbclient import NotebookClient
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "tutorials" / "tabiclv2_classifier_colab.ipynb"
-INFERENCE = ROOT / "tutorials" / "tabiclv2_classifier_artifact_inference_colab.ipynb"
 EVIDENCE_DIR = ROOT / "release-evidence"
 CONTENT_DIR = Path(
     os.environ.get("NOTEBOOK_RELEASE_CONTENT_DIR", str(ROOT / ".notebook-release-content"))
 ).resolve()
 COLAB_CONTENT_ROOT = "/content"
 ARTIFACT = CONTENT_DIR / "tabiclv2-classifier-artifact.zip"
-INFERENCE_CSV = CONTENT_DIR / "tabiclv2_classifier_release_inference.csv"
 
 
 def colab_stub(content_dir: Path) -> str:
@@ -123,7 +121,6 @@ def main() -> None:
         ARTIFACT.unlink()
 
     main_output = EVIDENCE_DIR / "tabiclv2_classifier_colab.executed.ipynb"
-    inference_output = EVIDENCE_DIR / "tabiclv2_classifier_artifact_inference_colab.executed.ipynb"
 
     evidence: dict[str, object] = {
         "notebookSpec": "1.0",
@@ -142,7 +139,6 @@ def main() -> None:
         },
         "profiles": {
             MAIN.name: "E2E",
-            INFERENCE.name: "ARTIFACT-INFERENCE",
         },
         "outcomes": {},
     }
@@ -155,39 +151,8 @@ def main() -> None:
         evidence["outcomes"][MAIN.name] = "PASS"
         evidence["artifactSha256"] = artifact_sha256
 
-        # Build a separate user-style CSV outside the companion notebook execution.
-        from sklearn.datasets import load_breast_cancer
-
-        sample = load_breast_cancer(as_frame=True)
-        sample.data.tail(8).to_csv(INFERENCE_CSV, index=False)
-
-        companion_prep = colab_stub(CONTENT_DIR) + f'''
-from pathlib import Path
-import google.colab
-
-_release_uploads = [
-    ("{ARTIFACT.name}", Path(r"{ARTIFACT}").read_bytes()),
-    ("release_inference.csv", Path(r"{INFERENCE_CSV}").read_bytes()),
-]
-
-def _release_upload():
-    if not _release_uploads:
-        raise RuntimeError("Unexpected additional upload request in artifact-inference notebook")
-    name, payload = _release_uploads.pop(0)
-    print(f"[release harness] supplying external upload: {{name}}")
-    return {{name: payload}}
-
-google.colab.files.upload = _release_upload
-'''
-        execute_notebook(
-            INFERENCE,
-            inference_output,
-            companion_prep,
-            replacements={
-                'EXPECTED_ZIP_SHA256 = ""': f'EXPECTED_ZIP_SHA256 = "{artifact_sha256}"'
-            },
-        )
-        evidence["outcomes"][INFERENCE.name] = "PASS"
+        # NOTEBOOK_SPEC 3.0: the artifact-inference companion was folded into the E2E notebook's closing
+        # external-artifact section, which this execution already ran; there is no second notebook.
         evidence["packages"] = package_versions()
 
         try:
@@ -200,7 +165,7 @@ google.colab.files.upload = _release_upload
 
         evidence["notes"] = [
             "The default E2E path is exercised without optional gradient fine-tuning.",
-            "The artifact-inference notebook consumes the producer artifact in a separate fresh kernel and scores a separate CSV upload.",
+            "The E2E notebook runs in a separate fresh kernel; its closing external-artifact section consumes the pinned sample artifact of an earlier recorded run, never this execution's export.",
             "The harness remaps Colab's /content path to a writable runner directory without changing notebook task semantics.",
             "GPU-only fine-tuning remains an optional branch and is not claimed by this CPU release execution record.",
         ]
