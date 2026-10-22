@@ -3,8 +3,9 @@
 The generator writes the infrastructure cells (runtime check, carrier, isolated install + stage runner, checkpoint
 staging) from repository files; this template holds the learner-facing prose, the guided layer and the learner
 cells. Every learner cell calls ``run_stage(...)``: the carried ``tools/tutorial_stages.py`` runs one stage per process
-in an isolated, hash-locked environment, so nothing is installed into the notebook kernel. The ARTIFACT-INFERENCE
-companion has its own template, ``tools/notebook_template_artifact_inference.py``.
+in an isolated, hash-locked environment, so nothing is installed into the notebook kernel. Since NOTEBOOK_SPEC 3.0 the
+notebook closes with the external-artifact section (Section 10, §19.1) that replaced the separate artifact-inference
+companion notebook.
 """
 # ruff: noqa: E501  -- markdown prose and code-cell text are kept on single lines for readable rendering
 
@@ -58,10 +59,6 @@ RUNTIME_PREREQ = (
     "- **Runtime:** a fresh **Linux x86_64** runtime — Google Colab with a **T4 GPU** is the documented runtime (the pre-registered fine-tuning grid needs CUDA, and only a Tesla T4 run scores the fresh test); Kaggle or a Linux Jupyter kernel also work, and a CPU-only runtime runs everything except the grid, which it skips with a printed note (that run is exploratory). The kernel's own Python version does not matter: the notebook installs nothing into it, and runs every stage with CPython 3.12.12 in an isolated environment built from {n_locked} hash-locked packages (`tabicl` 2.1.1 with its fine-tuning extras, `torch` 2.14.0 with its CUDA libraries, `numpy` 2.5.2, `pandas` 3.0.5, `scikit-learn` 1.9.0, `lightgbm` 4.7.0). About 0.2 GB of disk is needed for the checkpoint and about 8 GB for the isolated environment."
 )
 
-COMPANION_RUNTIME_PREREQ = (
-    "- **Runtime:** a fresh **Linux x86_64** runtime — Google Colab, Kaggle or a Linux Jupyter kernel; a GPU is optional (the companion only conditions and predicts, it never fine-tunes). The kernel's own Python version does not matter: the notebook installs nothing into it, and runs every stage with CPython 3.12.12 in an isolated environment built from {n_locked} hash-locked packages (`tabicl` 2.1.1, `torch` 2.14.0 with its CUDA libraries, `numpy` 2.5.2, `pandas` 3.0.5, `scikit-learn` 1.9.0, `lightgbm` 4.7.0). About 0.2 GB of disk is needed for the checkpoint and about 8 GB for the isolated environment. Class probabilities are renormalised row-wise after their deviation from 1 is checked (a rounding-level correction)."
-)
-
 TEMPLATE = {
     **ENVIRONMENT,
     "stem": "tabiclv2_classifier",
@@ -69,8 +66,7 @@ TEMPLATE = {
     "profile": "E2E",
     "mode": "GUIDED",
     "stage_runner": "tools/tutorial_stages.py",
-    "carried_extra": {"sample-bundle/SAMPLE_BUNDLE.json": "examples/sample-bundle/SAMPLE_BUNDLE.json"},
-    "notebook_spec": "2.5",
+    "notebook_spec": "3.0",
     "notebook_kind": "TUTORIAL",
     "e2e_runner_extras": True,
     "use_notice": (
@@ -84,10 +80,10 @@ TEMPLATE = {
         "> its use."
     ),
     "run_all": (
-        "Selecting **Run all** in a fresh Linux x86_64 runtime (a T4 GPU is the documented runtime) builds an isolated Python environment from the carried hash-locked requirements without touching the notebook kernel's own packages, then runs each stage below in its own process: it stages and digest-verifies the pinned TabICLv2 checkpoint, fetches the pinned MAGIC Gamma Telescope split archive (3,000 support, 1,000 validation and a 1,500-row fresh test) by immutable commit and verifies its SHA-256, validates and encodes the tables, evaluates the pretrained TabICLv2 classifier **adapted by in-context conditioning on the support rows**, runs a **pre-registered three-config fine-tuning grid** that takes real optimizer steps and keeps the pretrained model unless a config beats it on validation log loss by more than 0.005, compares LightGBM, a random forest and a majority-class baseline, scores the fresh test **only under the pre-registered settings** (a different setting writes an exploratory record and reads nothing), scores new rows, exports a DIMER-style serving bundle and reloads it in a fresh process. On a runtime without CUDA the grid is skipped with a printed note and the run is exploratory. Set `DIMER_MASK_FRESH_TEST=1` to skip the fresh test. No repository clone, DIMER worker or service, credential, upload dialog, configuration edit or runtime restart is required (NOTEBOOK_SPEC 2.5 §5). Recorded runs of this notebook are listed in `docs/release-verification.md`; this revision's own run is recorded there once it exists."
+        "Selecting **Run all** in a fresh Linux x86_64 runtime (a T4 GPU is the documented runtime) builds an isolated Python environment from the carried hash-locked requirements without touching the notebook kernel's own packages, then runs each stage below in its own process: it stages and digest-verifies the pinned TabICLv2 checkpoint, fetches the pinned MAGIC Gamma Telescope split archive (3,000 support, 1,000 validation and a 1,500-row fresh test) by immutable commit and verifies its SHA-256, validates and encodes the tables, evaluates the pretrained TabICLv2 classifier **adapted by in-context conditioning on the support rows**, runs a **pre-registered three-config fine-tuning grid** that takes real optimizer steps and keeps the pretrained model unless a config beats it on validation log loss by more than 0.005, compares LightGBM, a random forest and a majority-class baseline, scores the fresh test **only under the pre-registered settings** (a different setting writes an exploratory record and reads nothing), scores new rows, exports a DIMER-style serving bundle and reloads it in a fresh process, and finally, in the closing external-artifact section, downloads the pinned sample artifact that a recorded earlier run of this notebook exported (a GitHub release asset, accepted only at its pinned SHA-256 and never this run's export), validates it, rebuilds serving state from its files alone and scores eight MAGIC rows. On a runtime without CUDA the grid is skipped with a printed note and the run is exploratory. Set `DIMER_MASK_FRESH_TEST=1` to skip the fresh test. No repository clone, DIMER worker or service, credential, upload dialog, configuration edit or runtime restart is required (NOTEBOOK_SPEC 3.0 §5). Recorded runs of this notebook are listed in `docs/release-verification.md`; this revision's own run is recorded there once it exists."
     ),
     "byod": (
-        "After the sample workflow completes, set `USE_BYOD = True` and `DATA_SOURCE` to `Upload CSV` or `Upload pre-split train/val/test` in Section 4 and run Sections 4–9 again. Give the files by path (`BYOD_CSV_PATH`, or `BYOD_TRAIN_PATH` / `BYOD_VAL_PATH` / optional `BYOD_TEST_PATH` — these work in Colab, Kaggle and Jupyter), or leave the paths empty in Colab to use upload dialogs. Name your label column in `TARGET_COLUMN`. A missing label column is refused naming it; rows with a missing label are dropped **and counted in the input manifest**; a column that is numeric except for a few stray strings is refused naming the column and the values (list it in `TEXT_COLUMNS` if it really is categorical). `RUN_NEW_DATA_INFERENCE` in Section 8 scores your own unlabelled rows. Files stay inside this runtime. BYOD is optional, never part of the default path, and always exploratory: a BYOD run never reads the fresh test."
+        "After the sample workflow completes, set `USE_BYOD = True` and `DATA_SOURCE` to `Upload CSV` or `Upload pre-split train/val/test` in Section 4 and run Sections 4–9 again. Give the files by path (`BYOD_CSV_PATH`, or `BYOD_TRAIN_PATH` / `BYOD_VAL_PATH` / optional `BYOD_TEST_PATH` — these work in Colab, Kaggle and Jupyter), or leave the paths empty in Colab to use upload dialogs. Name your label column in `TARGET_COLUMN`. A missing label column is refused naming it; rows with a missing label are dropped **and counted in the input manifest**; a column that is numeric except for a few stray strings is refused naming the column and the values (list it in `TEXT_COLUMNS` if it really is categorical). `RUN_NEW_DATA_INFERENCE` in Section 8 scores your own unlabelled rows; in Section 10, `USE_OWN_ROWS` scores your own rows with the external artifact, and `ARTIFACT_SOURCE` can load your own artifact ZIP instead of the pinned sample (both off by default). Files stay inside this runtime. BYOD is optional, never part of the default path, and always exploratory: a BYOD run never reads the fresh test."
     ),
     "title": "TabICLv2 Classifier — DIMER E2E tabular classification tutorial (standalone)",
     "badges": BADGES,
@@ -125,9 +121,11 @@ TEMPLATE = {
         "5. **Apply** the selected model to new rows and read class-ordered, uncalibrated probabilities under an explicit "
         "`argmax` rule (Section 8).\n"
         "6. **Verify** that the exported bundle rebuilds an equivalent classifier in a fresh process (Section 9).\n"
-        "7. **Predict**, run and **explain** how a three-class table with 36 holdout rows changes the one-row resolution and "
-        "ROC-AUC, in an optional activity (Section 10).\n"
-        "8. **Write** an evidence-based conclusion that names the baselines, the selection basis and the limits of one public "
+        "7. **Validate and serve** an artifact made outside this run: check its pinned digest before opening it, read its "
+        "provenance and format, rebuild serving state from its files, and say how that differs from the fresh reload (Section 10).\n"
+        "8. **Predict**, run and **explain** how a three-class table with 36 holdout rows changes the one-row resolution and "
+        "ROC-AUC, in an optional activity (Section 11).\n"
+        "9. **Write** an evidence-based conclusion that names the baselines, the selection basis and the limits of one public "
         "table (Conclusion)."
     ),
     "exclusions": (
@@ -159,13 +157,14 @@ TEMPLATE = {
                 "environment's Python, streams what it prints, and stops the notebook with the stage's own error message if it "
                 "fails. Stages hand results to each other only through files: the verified checkpoint, the partitions and fitted "
                 "encoders, the fine-tuned checkpoint if one was selected, and JSON records.\n\n"
-                "**Two kinds of cell.** *Learner cells* (Sections 4–10) are the machine-learning workflow. *Infrastructure cells* "
+                "**Two kinds of cell.** *Learner cells* (Sections 4–11) are the machine-learning workflow. *Infrastructure cells* "
                 "(Sections 1–3: the runtime check, the carried code, the isolated environment and the checkpoint staging) are "
                 "collapsed and titled **Infrastructure**. You may run them without studying their implementation: they exist for "
                 "reproducibility and provenance, not as prerequisite machine-learning knowledge.\n\n"
                 "**Form controls.** `DATA_SOURCE`, `USE_BYOD`, `TARGET_COLUMN`, the `BYOD_*_PATH` fields and `TEXT_COLUMNS` "
                 "(Section 4); `RUN_FINE_TUNING`, `GRID_EPOCHS_CAP`, `GRID_LEARNING_RATE` and `RANDOM_STATE` (Section 6); `RUN_NEW_DATA_INFERENCE` and "
-                "`NEW_DATA_PATH` (Section 8); `RUN_ACTIVITY` and `ACTIVITY_DATA_SOURCE` (Section 10). Leave them at their defaults "
+                "`NEW_DATA_PATH` (Section 8); `ARTIFACT_SOURCE`, `ARTIFACT_ZIP_PATH`, `EXPECTED_ZIP_SHA256`, `USE_OWN_ROWS` and "
+                "`EXTERNAL_ROWS_PATH` (Section 10); `RUN_ACTIVITY` and `ACTIVITY_DATA_SOURCE` (Section 11). Leave them at their defaults "
                 "for the first run: changing any of them makes the run exploratory (validation only; the fresh test is not read). "
                 "The environment variable `DIMER_MASK_FRESH_TEST=1` skips the fresh test; stages run with "
                 "`DIMER_ISOLATED_ENV` set to the isolated environment's path.\n\n"
@@ -185,7 +184,8 @@ TEMPLATE = {
                 "| **Fine-tune (GPU)** | support rows; validation for early stopping | a pre-registered three-config grid, 6 optimizer steps per epoch | a selection on validation log loss; pretrained kept unless beaten by > 0.005 |\n"
                 "| **Fresh test** | 1,500 never-scored rows | the pre-registered reading rule, score-once and fail-closed | Δ log loss (selected − pretrained) with a paired bootstrap interval |\n"
                 "| **Evaluate** | validation rows | `classification_metrics`, majority baseline, LightGBM, random forest, an in-memory blend | metrics, error counts, an evaluation report |\n"
-                "| **Package** | selected checkpoint + support rows + settings | ZIP bundle, `safe_extract_zip`, `verify_artifact_bundle` | a bundle that rebuilds an equivalent classifier |\n\n"
+                "| **Package** | selected checkpoint + support rows + settings | ZIP bundle, `safe_extract_zip`, `verify_artifact_bundle` | a bundle that rebuilds an equivalent classifier |\n"
+                "| **Serve elsewhere** | a pinned artifact from an earlier recorded run + eight MAGIC rows | digest check, `safe_extract_zip`, `validate_artifact_runtime`, `verify_artifact_bundle` | predictions under `outputs/external_artifact/` |\n\n"
                 "## Roadmap\n\n"
                 "| Section | Tag | What happens | What you read |\n"
                 "|---|---|---|---|\n"
@@ -199,10 +199,12 @@ TEMPLATE = {
                 "| 7b. Fresh test | [Evaluation practice] | score-once, pre-registered reading rule | the principal result and its `test_look` |\n"
                 "| 8. New-data inference | [Engineering] | eight rows (or your file) scored | the output contract |\n"
                 "| 9. Export and fresh reload | [Engineering] | the bundle exported and rebuilt in a new process | the reload check and the digest |\n"
-                "| 10. Optional activity | [Concept] | the three-class Wine table (off by default) | your comparison |\n"
+                "| Interpretation and conclusion | [Evaluation practice] | limits and an evidence-based conclusion | your conclusion |\n"
+                "| 10. Using an artifact made elsewhere | [Engineering] | the pinned sample artifact verified, rebuilt and used to score MAGIC rows | provenance, digests, predictions |\n"
+                "| 11. Optional activity | [Concept] | the three-class Wine table (off by default) | your comparison |\n"
                 "| Troubleshooting | [Engineering] | common failures and what to do | when something fails |\n"
-                "| Interpretation and conclusion | [Evaluation practice] | limits and an evidence-based conclusion | your conclusion |\n\n"
-                "**Fast path.** Run all, then read Sections 6, 7b and 9 and the conclusion."
+                "| References | | sources and repository documents | |\n\n"
+                "**Fast path.** Run all, then read Sections 6, 7b, 9 and 10 and the conclusion."
             ),
             (
                 "<details>\n"
@@ -558,15 +560,14 @@ TEMPLATE = {
                 "context inherits the source data's licensing obligations (MAGIC: CC BY 4.0, attribution required). `artifact.json` "
                 "records the feature and target columns, the class labels, the base-model identity and digest, the selected mode "
                 "and its basis, the metrics, the inference settings, per-file sizes and SHA-256 digests, the payload allowlist and "
-                "the producer runtime. The `export` stage prints the ZIP's SHA-256 — the **trusted digest** to give the companion "
-                "notebook (`EXPECTED_ZIP_SHA256`). (`matches_pinned_sample_context` is printed only for the Breast Cancer source, "
-                "whose support rows the companion's pinned sample bundle carries.)\n\n"
+                "the producer runtime. The `export` stage prints the ZIP's SHA-256 — the **trusted digest** to hand over with the ZIP, "
+                "which whoever loads it checks before opening it (Section 10 shows that check on an artifact made elsewhere).\n\n"
                 "The `reload` stage then runs in a **fresh process**: it extracts the ZIP with `safe_extract_zip`, verifies the "
                 "allowlist, sizes and digests with `verify_artifact_bundle`, rebuilds the classifier from the bundle alone, and "
                 "checks that its labels equal and its probabilities agree with the exporting process's on eight validation rows "
                 "(`rtol=1e-5`, `atol=1e-7`).\n\n"
                 "**Predict before running:** if Section 6 kept the pretrained model, which checkpoint is in the bundle, and what "
-                "does the companion then check about it?"
+                "does Section 10 check about such a checkpoint before it loads one?"
             ),
             "code": "run_stage('export')\nrun_stage('reload')",
         },
@@ -577,7 +578,7 @@ TEMPLATE = {
                 "**Checkpoint:** the bundle's checkpoint is code-capable (a PyTorch/Lightning checkpoint). What protects the person "
                 "who loads it?\n\n"
                 "<details>\n<summary>Check your reasoning (open after answering)</summary>\n\n"
-                "For a `pretrained` bundle, the companion requires the checkpoint's SHA-256 to equal the pinned base checkpoint's, so "
+                "For a `pretrained` bundle, the external-artifact section (Section 10) requires the checkpoint's SHA-256 to equal the pinned base checkpoint's, so "
                 "it is byte for byte the file the model's publisher released and Section 3 verified. For a `fine-tuned` bundle no "
                 "such reference exists: the only protection is that the ZIP's digest matches a trusted digest received from the "
                 "producer through a separate channel (`EXPECTED_ZIP_SHA256`). So: load fine-tuned bundles only from producers you "
@@ -587,7 +588,167 @@ TEMPLATE = {
         },
         {
             "md": (
-                "## 10. Optional activity: a three-class table with 36 holdout rows · [Concept]\n\n"
+            "## Interpretation and limits\n\n"
+            "`prediction` is the `argmax` of uncalibrated class probabilities over the fitted class set; the package ships no "
+            "threshold, and any deployment cut-off must be chosen on the caller's own labelled, domain-representative data. The "
+            "evaluation report's `sample-sanity` verdict names what it is: one seeded split of a public sample with no dispersion "
+            "estimate. MAGIC is a simulated physics table in the TALENT benchmark, which the TabICLv2 paper evaluated on [1]; "
+            "TabICLv2 is pretrained on synthetic tables only, so that is evaluation exposure, not training leakage. It is not in "
+            "TabArena or OpenML-CC18. The fine-tuning selection and the blend weight are chosen on validation and are "
+            "selection-biased; only the fresh test, scored under the pre-registered settings, is an unbiased estimate, and its "
+            "recorded evaluation and reproductions are listed in `docs/release-verification.md`. The evaluation of record (2026-10-20, "
+            "hosted T4) kept the pretrained model, so its fresh test reads \"same model (Δ = 0)\": accuracy 0.8993 (Wilson 95 % "
+            "0.8831–0.9136) and ROC AUC 0.95 on 1,500 rows. A null fine-tuning result here is "
+            "evidence about this model on this table, not a general rule.\n\n"
+            "**Earlier-run reference (Breast Cancer, previous recipe).** In the Colab T4 run of blob `051c81e9` (2026-10-10, recorded "
+            "in `docs/release-verification.md`), the earlier default — the Breast Cancer table with a 114-row holdout and a 114-row "
+            "test — gave the pretrained model holdout accuracy 0.9825 (112/114); the old three-epoch fine-tune took one non-zero "
+            "step and was discarded by tabicl, so the candidate equalled the pretrained model; LightGBM scored 0.9649 and a random "
+            "forest 0.9561 on that holdout. That test was scored in recorded runs and is an exposed development test; no setting of "
+            "this notebook was chosen on it. These numbers are history, not results of this revision.\n\n"
+            "Successful execution proves that the recorded repository revision's package, carried in this notebook, can acquire "
+            "and digest-verify the pinned checkpoint and data, validate the demonstrated tables with class coverage, condition on "
+            "support rows, run a pre-registered fine-tuning grid with validation-based selection on a GPU, score the fresh test "
+            "only under the pre-registered settings, compute sample metrics against trivial and classical baselines, score rows "
+            "with class probabilities under an explicit `argmax` rule, export a DIMER-style serving bundle and rebuild an "
+            "equivalent classifier from that bundle alone in a fresh process, and validate, rebuild and serve a pinned artifact "
+            "that an earlier recorded run produced — without the repository being reachable. It does **not** establish benchmark superiority, "
+            "domain generalisation, fairness, robustness, probability calibration, production safety, or deployment fitness.\n\n"
+            "## Conclusion · [Evaluation practice]\n\n"
+            "Write three to five sentences, using the numbers your run printed:\n\n"
+            "1. **Result:** the selected model's validation accuracy and log loss beside the majority baseline, LightGBM and the "
+            "random forest.\n"
+            "2. **Adaptation:** what each grid config did on validation (curve, steps, parameter delta), and which model was "
+            "selected and why.\n"
+            "3. **Fresh test:** the primary endpoint with its interval and verdict, and its `test_look`.\n"
+            "4. **Reuse and limits:** what the Section 9 reload proved, what Section 10 (next) adds with an artifact made elsewhere, and the one "
+            "limitation you would fix first.\n\n"
+            "<details>\n<summary>Sample conclusion (open after writing yours)</summary>\n\n"
+            "A sample of the reasoning, written for the case the hosted run of record showed (2026-10-20, T4); "
+            "replace it with your own numbers: on MAGIC's 1,000 validation rows the pretrained TabICLv2 model already beat LightGBM "
+            "and the random forest on log loss (0.2634 against 0.3412 and 0.3234). Fine-tuning moved the weights in one config — "
+            "C3 at learning rate 1e-6 lowered validation log loss by about 0.0006 — but no config beat the pretrained model by "
+            "the 0.005 tolerance, so the pretrained model was kept: the fresh test then reports \"same model (Δ = 0)\" "
+            "(accuracy 0.8993, Wilson 95 % 0.8831–0.9136) — nothing to compare, which is itself the finding that fine-tuning "
+            "this in-context model on 3,000 rows did not measurably help.If instead a config was "
+            "selected, report the fresh-test Δ with its interval and verdict, and say whether the interval excludes 0. "
+            "The bundle rebuilt an identical classifier in a fresh process. Before deployment I would evaluate on a "
+            "domain-representative table and calibrate the probabilities.\n\n"
+            "</details>\n\n"
+            ),
+        },
+        {
+            "md": (
+                "## 10. Using an artifact made elsewhere · [Engineering]\n\n"
+                "So far this notebook has scored data with the model it adapted in this run, and the fresh reload showed that this "
+                "run's export survives serialization. This section does something different: the reload shows that this run's "
+                "export survives serialization, and this section shows that an artifact made elsewhere can be validated and served "
+                "here. It downloads a pinned artifact that an earlier, recorded run of this notebook produced, verifies its SHA-256 "
+                "before opening it, shows its provenance and format, rebuilds serving state from the files alone, and scores sample "
+                "rows that follow the same data contract as the rest of this notebook. **This run's own export (Section 9) is never "
+                "used here.**\n\n"
+                "**This section needs only the setup cells (Sections 1–3).** It reads no partition, encoder, model or file that "
+                "Sections 4–9 created, so if you already hold a compatible artifact you can run Sections 1–3 and then this section "
+                "alone. Its outputs go to `outputs/external_artifact/`, apart from the main path's files.\n\n"
+                "**The pinned sample artifact.** By default the `external_artifact` stage downloads `tabiclv2_classifier_artifact.zip` "
+                "from this repository's GitHub release `sample-artifact-magic-v1` (no account or token). It is the deterministic "
+                "export of a recorded hosted T4 run of this notebook's default path (the MAGIC sample) at commit `383ca04`; the "
+                "release notes name the run record, and the asset is never replaced (a changed artifact gets a new tag). The stage "
+                "prints the URL, the pinned SHA-256, the producer and the format `tabicl-dimer-classifier-v1` **before** it "
+                "downloads anything, then refuses the file unless its SHA-256 equals the pinned value. Only then does "
+                "`safe_extract_zip` copy the members one by one (no absolute paths, `..`, symlinks or oversize archives); "
+                "`validate_artifact_runtime` checks the format and the `tabicl`/`torch` versions; the manifest must name the pinned "
+                "base checkpoint; `verify_artifact_bundle` checks the member allowlist, sizes and digests; and the manifest's "
+                "features, target and class labels must equal the MAGIC default path's. Any failed check stops the run, and no "
+                "prediction file is written.\n\n"
+                "**Trust boundary.** The artifact's `checkpoints/best.ckpt` is deserialised by `tabicl` (a PyTorch/Lightning "
+                "checkpoint, which can carry code), so loading an artifact means trusting its producer. The pinned SHA-256 binds this "
+                "download to the file the maintainer published; for a `pretrained` artifact the checkpoint must also be, byte for "
+                "byte, the base checkpoint whose digest Section 3 verified. Nothing is deserialised before these checks pass. For a "
+                "`fine-tuned` artifact of your own, the only binding is a digest you received from its producer through a separate "
+                "channel (`EXPECTED_ZIP_SHA256`).\n\n"
+                "**Optional: your own artifact (off by default).** Set `ARTIFACT_SOURCE` to `My own artifact ZIP` and give "
+                "`ARTIFACT_ZIP_PATH` (or leave it empty in Colab to upload) and the producer's `EXPECTED_ZIP_SHA256`. Without a "
+                "digest the checks establish internal consistency only, and the stage says so."
+            ),
+            "code": (
+                "ARTIFACT_SOURCE = 'Pinned sample artifact'  # @param [\"Pinned sample artifact\", \"My own artifact ZIP\"]\n"
+                "ARTIFACT_ZIP_PATH = ''  # @param {{type:\"string\"}}\n"
+                "EXPECTED_ZIP_SHA256 = ''  # @param {{type:\"string\"}}\n\n\n"
+                "def external_upload(what):\n"
+                "    \"\"\"Colab upload for the optional branches of this section; elsewhere, set the path field.\"\"\"\n"
+                "    try:\n"
+                "        from google.colab import files\n"
+                "    except ImportError as exc:\n"
+                "        raise RuntimeError(f'No path was given for {{what}}, and the upload dialog exists only in Google Colab: set the path field, then run this cell again.') from exc\n"
+                "    uploaded = files.upload()\n"
+                "    if len(uploaded) != 1:\n"
+                "        raise RuntimeError(f'Expected exactly one file for {{what}}; received {{len(uploaded)}}. Run this cell again.')\n"
+                "    ((upload_name, upload_payload),) = uploaded.items()\n"
+                "    upload_path = ROOT / 'inputs' / Path(upload_name).name\n"
+                "    upload_path.parent.mkdir(parents=True, exist_ok=True)\n"
+                "    upload_path.write_bytes(upload_payload)\n"
+                "    return str(upload_path)\n\n\n"
+                "if ARTIFACT_SOURCE == 'Pinned sample artifact':\n"
+                "    run_stage('external_artifact', source='pinned')\n"
+                "else:\n"
+                "    run_stage('external_artifact', source='own', zip_path=ARTIFACT_ZIP_PATH or external_upload('your artifact ZIP'), expected_zip_sha256=EXPECTED_ZIP_SHA256)"
+            ),
+        },
+        {
+            "md": (
+                "**What to notice:** the provenance line is printed before the download; then `trusted_digest: verified (pinned "
+                "SAMPLE_ARTIFACT_SHA256)`, the `mode`, the `checkpoint_binding` and the `data_contract`; the producer's runtime and "
+                "notebook source; and the artifact's 10 MAGIC features, its `target` column and the class labels `g` and `h`."
+            ),
+        },
+        {
+            "md": (
+                "**Reconstruct serving state locally.** The `external_reconstruct` stage rebuilds the classifier from the "
+                "artifact's files alone, in a new process: its checkpoint (with `allow_auto_download=False`), its "
+                "`training_context.parquet` — the fitted support rows TabICL conditions on — and the categorical encoders recorded in "
+                "`artifact.json`. Nothing is refitted from the rows you are about to score."
+            ),
+            "code": "run_stage('external_reconstruct')",
+        },
+        {
+            "md": (
+                "**Score sample rows, or your own.** By default the `external_predict` stage takes the first eight rows of the pinned "
+                "MAGIC validation file, removes their label, and scores them: they follow the artifact's data contract and are not "
+                "among its support rows (the 1,500-row fresh test is never read). The rows pass the same `read_inference_csv` / "
+                "`validate_inputs` checks as Section 8, a probe with a missing feature must be refused, and non-numeric values in a "
+                "numeric feature are refused naming the column. The predictions, the input manifest and the artifact's provenance "
+                "go to `outputs/external_artifact/{stem}_external_predictions.csv` and "
+                "`outputs/external_artifact/{stem}_external_result.json`.\n\n"
+                "**Optional: your own rows (BYOD, off by default).** Tick `USE_OWN_ROWS` and set `EXTERNAL_ROWS_PATH` (or leave it "
+                "empty in Colab to upload) to an unlabelled CSV with the artifact's feature columns. With your own artifact, your own "
+                "rows are required: the MAGIC rows follow only the pinned artifact's contract."
+            ),
+            "code": (
+                "USE_OWN_ROWS = False  # @param {{type:\"boolean\"}}\n"
+                "EXTERNAL_ROWS_PATH = ''  # @param {{type:\"string\"}}\n\n"
+                "external_rows = ''\n"
+                "if USE_OWN_ROWS:\n"
+                "    external_rows = EXTERNAL_ROWS_PATH or external_upload('one unlabelled CSV')\n"
+                "run_stage('external_predict', rows_path=external_rows)"
+            ),
+        },
+        {
+            "md": (
+                "**What to notice:** eight rows with `row_id`, `prediction` and `probability_g` / `probability_h` summing to 1; the "
+                "two output paths under `outputs/external_artifact/`; and the artifact's `zip_sha256`, equal to the pinned digest.\n\n"
+                "**Checkpoint:** if you set `ARTIFACT_SOURCE` to this run's own `outputs/{stem}_artifact.zip`, would that be "
+                "external-artifact evidence?\n\n"
+                "<details>\n<summary>Check your reasoning (open after answering)</summary>\n\n"
+                "No. An artifact this run created and then reloaded is a fresh-boundary test, which Section 9 already performed. "
+                "External evidence needs an artifact made outside this run with documented provenance, which is why the default is a "
+                "pinned release asset from an earlier recorded run, checked by its SHA-256 before it is opened.\n\n"
+                "</details>"
+            ),
+        },
+        {
+            "md": (
+                "## 11. Optional activity: a three-class table with 36 holdout rows · [Concept]\n\n"
                 "**Predict → Change → Run → Observe → Explain.** **Predict:** on `Sample: Wine` (178 rows, three classes, a 60/20/20 "
                 "split leaves 36 holdout rows), what is the one-row resolution, and will one-vs-rest ROC-AUC be more or less "
                 "informative than accuracy? **Change:** tick `RUN_ACTIVITY` (keep `ACTIVITY_DATA_SOURCE = 'Sample: Wine'`). **Run** "
@@ -631,6 +792,9 @@ TEMPLATE = {
         "| `Refused: …` | an input was refused (one message, no traceback) | Fix the named file or field and re-run the Section 4 cell; nothing from the refused input was kept. |\n"
         "| A Hub download error in Section 3, or `… sha256 … != manifest` | a transient failure or a corrupted download | Re-run Section 3; delete the partial file under `weights/` if the digest fails. Never edit the manifest. |\n"
         "| `MAGIC sample archive digest mismatch` / `Palmer Penguins sample archive digest mismatch` | the pinned archive could not be fetched intact | Retry; never change the pinned digest. |\n"
+        "| `Trusted digest mismatch` in Section 10 | the downloaded or supplied ZIP is not the pinned (or expected) artifact | Re-run the Section 10 cell to download again; never change the pinned digest. With your own ZIP, ask its producer for the digest. |\n"
+        "| `does not follow this notebook's default data contract (SART10)` | the artifact was built from another dataset or an earlier default | Use an artifact exported from this notebook's current default path. |\n"
+        "| `external_artifact.json is missing` | a later Section 10 cell was run before the first one | Run the Section 10 cells in order (setup Sections 1–3 first). |\n"
         "| `… does not have a deterministic implementation …` in Section 6 | an operation without a deterministic CUDA kernel | Report it with the log; do not switch the determinism flags off for a run of record. |\n"
         "| `CUDA out of memory` in Section 6 | a large BYOD table | Untick `RUN_FINE_TUNING` (the run becomes exploratory), or restart on a fresh T4. |\n"
         "| `fresh test not scored: pre-scoring check(s) failed` | Section 6 was not run after Section 4, or a file changed | Re-run from Section 4; a failed check is not a look. |\n"
@@ -640,55 +804,11 @@ TEMPLATE = {
         "| `need at least 50 labelled rows` / `Every class needs >= 2 rows` | a table below the floors | Supply more rows or merge rare classes. |\n"
         "| `target classes unseen in training` | a validation/test class missing from the support rows | Re-split so every class is in the support partition. |\n"
         "| `No path was given …` outside Colab, or `The upload was cancelled or empty` | no file supplied | Set the path field(s), or run the cell again and choose files. |\n\n"
-        "## Interpretation and limits\n\n"
-        "`prediction` is the `argmax` of uncalibrated class probabilities over the fitted class set; the package ships no "
-        "threshold, and any deployment cut-off must be chosen on the caller's own labelled, domain-representative data. The "
-        "evaluation report's `sample-sanity` verdict names what it is: one seeded split of a public sample with no dispersion "
-        "estimate. MAGIC is a simulated physics table in the TALENT benchmark, which the TabICLv2 paper evaluated on [1]; "
-        "TabICLv2 is pretrained on synthetic tables only, so that is evaluation exposure, not training leakage. It is not in "
-        "TabArena or OpenML-CC18. The fine-tuning selection and the blend weight are chosen on validation and are "
-        "selection-biased; only the fresh test, scored under the pre-registered settings, is an unbiased estimate, and its "
-        "recorded evaluation and reproductions are listed in `docs/release-verification.md`. The evaluation of record (2026-10-20, "
-        "hosted T4) kept the pretrained model, so its fresh test reads \"same model (Δ = 0)\": accuracy 0.8993 (Wilson 95 % "
-        "0.8831–0.9136) and ROC AUC 0.95 on 1,500 rows. A null fine-tuning result here is "
-        "evidence about this model on this table, not a general rule.\n\n"
-        "**Earlier-run reference (Breast Cancer, previous recipe).** In the Colab T4 run of blob `051c81e9` (2026-10-10, recorded "
-        "in `docs/release-verification.md`), the earlier default — the Breast Cancer table with a 114-row holdout and a 114-row "
-        "test — gave the pretrained model holdout accuracy 0.9825 (112/114); the old three-epoch fine-tune took one non-zero "
-        "step and was discarded by tabicl, so the candidate equalled the pretrained model; LightGBM scored 0.9649 and a random "
-        "forest 0.9561 on that holdout. That test was scored in recorded runs and is an exposed development test; no setting of "
-        "this notebook was chosen on it. These numbers are history, not results of this revision.\n\n"
-        "Successful execution proves that the recorded repository revision's package, carried in this notebook, can acquire "
-        "and digest-verify the pinned checkpoint and data, validate the demonstrated tables with class coverage, condition on "
-        "support rows, run a pre-registered fine-tuning grid with validation-based selection on a GPU, score the fresh test "
-        "only under the pre-registered settings, compute sample metrics against trivial and classical baselines, score rows "
-        "with class probabilities under an explicit `argmax` rule, export a DIMER-style serving bundle and rebuild an "
-        "equivalent classifier from that bundle alone in a fresh process — without the repository being reachable. It does **not** establish benchmark superiority, "
-        "domain generalisation, fairness, robustness, probability calibration, production safety, or deployment fitness.\n\n"
-        "## Conclusion · [Evaluation practice]\n\n"
-        "Write three to five sentences, using the numbers your run printed:\n\n"
-        "1. **Result:** the selected model's validation accuracy and log loss beside the majority baseline, LightGBM and the "
-        "random forest.\n"
-        "2. **Adaptation:** what each grid config did on validation (curve, steps, parameter delta), and which model was "
-        "selected and why.\n"
-        "3. **Fresh test:** the primary endpoint with its interval and verdict, and its `test_look`.\n"
-        "4. **Reuse and limits:** what the Section 9 reload proved, and the one limitation you would fix first.\n\n"
-        "<details>\n<summary>Sample conclusion (open after writing yours)</summary>\n\n"
-        "A sample of the reasoning, written for the case the hosted run of record showed (2026-10-20, T4); "
-        "replace it with your own numbers: on MAGIC's 1,000 validation rows the pretrained TabICLv2 model already beat LightGBM "
-        "and the random forest on log loss (0.2634 against 0.3412 and 0.3234). Fine-tuning moved the weights in one config — "
-        "C3 at learning rate 1e-6 lowered validation log loss by about 0.0006 — but no config beat the pretrained model by "
-        "the 0.005 tolerance, so the pretrained model was kept: the fresh test then reports \"same model (Δ = 0)\" "
-        "(accuracy 0.8993, Wilson 95 % 0.8831–0.9136) — nothing to compare, which is itself the finding that fine-tuning "
-        "this in-context model on 3,000 rows did not measurably help.If instead a config was "
-        "selected, report the fresh-test Δ with its interval and verdict, and say whether the interval excludes 0. "
-        "The bundle rebuilt an identical classifier in a fresh process. Before deployment I would evaluate on a "
-        "domain-representative table and calibrate the probabilities.\n\n"
-        "</details>\n\n"
         "**Next experiments (all exploratory, validation only):** set `GRID_LEARNING_RATE` or `GRID_EPOCHS_CAP` and compare the "
         "curves; switch `DATA_SOURCE` to `Sample: Palmer Penguins` (categorical features); upload your own pre-split "
-        "partitions; feed `outputs/{stem}_artifact.zip`, its printed digest and `outputs/{stem}_new_rows.csv` to the companion "
-        "artifact-inference notebook in a separate session.\n\n"
+        "partitions; in a separate session, set `ARTIFACT_SOURCE` to your own ZIP in Section 10 and give it this run's "
+        "`outputs/{stem}_artifact.zip` with its printed digest (an exercise of the optional branch, not external-artifact "
+        "evidence).\n\n"
         "## References\n\n"
         "[1] J. Qu et al., \"TabICLv2,\" arXiv:2602.11139, 2026. [Online]. Available: https://arxiv.org/abs/2602.11139\n\n"
         "[2] J. Qu et al., \"TabICL: A tabular foundation model for in-context learning on large data,\" arXiv:2502.05564, 2025. [Online]. Available: https://arxiv.org/abs/2502.05564\n\n"

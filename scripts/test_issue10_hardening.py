@@ -22,7 +22,6 @@ if str(ROOT / "src") not in sys.path:
 from tabicl_classifier_pipeline import apply_categorical_encoder  # noqa: E402
 
 MAIN = ROOT / "tutorials" / "tabiclv2_classifier_colab.ipynb"
-INFERENCE = ROOT / "tutorials" / "tabiclv2_classifier_artifact_inference_colab.ipynb"
 
 
 def text(path):
@@ -60,12 +59,12 @@ class Issue10HardeningTests(unittest.TestCase):
         self.assertIn("fine-tuned `best.ckpt` may remain larger", main)
         self.assertIn("checkpoint compatibility", main)
 
-    def test_unseen_categories_are_counted_for_main_and_companion(self):
+    def test_unseen_categories_are_counted_in_the_notebook(self):
         frame = pd.DataFrame({"kind": ["known", "new", None]})
         encoded, unseen = apply_categorical_encoder(frame, {"kind": ["known"]})
         self.assertEqual(encoded["kind"].tolist(), [0, 1, 1])
         self.assertEqual(unseen, {"kind": 1})
-        for path in (MAIN, INFERENCE):
+        for path in (MAIN,):
             with self.subTest(notebook=path.name):
                 self.assertIn("apply_categorical_encoder(", text(path))
                 self.assertIn("unseen", text(path))

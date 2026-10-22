@@ -1,14 +1,25 @@
 # Release verification
 
-`tutorials/tabiclv2_classifier_colab.ipynb` (`E2E`) and `tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb`
-(`ARTIFACT-INFERENCE`) are **release candidates** until the exact notebook revisions have executed top-to-bottom in a
-clean supported runtime. Unit tests, JSON validation, code-cell compilation, and `tools/validate_release_assets.py` are
-necessary checks but are **not** runtime evidence under DIMER Notebook Specification 2.2. This file is the durable
-release-gate record for both notebooks.
+`tutorials/tabiclv2_classifier_colab.ipynb` (`E2E`) is a **release candidate** until the exact notebook revision has
+executed top-to-bottom in a clean supported runtime. Unit tests, JSON validation, code-cell compilation, and
+`tools/validate_release_assets.py` are necessary checks but are **not** runtime evidence under DIMER Notebook
+Specification 3.0. This file is the durable release-gate record.
+
+**Notebook Spec 3.0 fold (2026-10-22).** The notebook now declares Notebook Spec 3.0 and closes with the external-artifact
+section (Section 10, §19.1). The artifact-inference companion `tutorials/tabiclv2_classifier_artifact_inference_colab.ipynb`,
+its template, its stage runner, `tests/test_companion_parity.py`, `tools/build_sample_bundle.py` and the Breast Cancer sample
+bundle `examples/sample-bundle/` were deleted (KND11; the bundle was assembled by a script that ran no model and described an
+earlier default, so it could not meet SART9/SART10). The section's default artifact is the release asset
+`tabiclv2_classifier_artifact.zip` of tag `sample-artifact-magic-v1` (SHA-256
+`2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c`, 102,793,443 bytes): the deterministic export of the recorded
+hosted T4 run of `383ca04` listed under *Recorded executions* (SART8). The section's own hosted evidence needs a run of the
+migrated notebook revision with that pin (the second pass of §32.2); until it is recorded here, the migrated notebook stays
+Candidate. Text below that describes the companion, its sample bundle or both notebooks describes revisions before the fold
+and is kept as history (REL14); the companion's execution evidence is not evidence for the migrated notebook.
 
 ## Automatic coverage (static, every pull request)
 
-CI runs `tools/validate_release_assets.py`, which checks, for each of the two notebooks:
+CI runs `tools/validate_release_assets.py`, which checks the notebook (the companion-specific items below applied before the Notebook Spec 3.0 fold; the same checks now bind the external-artifact section, plus the pinned URL and digest, the digest check before extraction, the SART10 contract check and the `outputs/external_artifact/` exports):
 
 - notebook JSON parses; every code cell compiles as plain Python (no `%`/`!` magics); no persisted outputs or
   execution counts; no unresolved placeholder markers; every code cell is preceded by an explanatory markdown cell;
@@ -57,12 +68,12 @@ CI runs `tools/validate_release_assets.py`, which checks, for each of the two no
   unsupported release-grade, production-readiness or benchmark claim;
 - `MODEL_CARD.md` front matter, single H1, required heading order, and the `## Checkpoint Provenance` section.
 
-CI also runs `ruff`, `tools/build_notebook.py --check` for both templates, `scripts/validate_colab_tutorial.py` (the
+CI also runs `ruff`, `tools/build_notebook.py --check`, `scripts/validate_colab_tutorial.py` (the
 repository's own checks: exact build backend, release lock files and their agreement with the pins, the carried hash lock,
 the fine-tune gate and its bounds, hardening markers), the two `scripts/test_*.py` classification suites and the offline
-unit suite (`tests/`: snapshot, role and weight-fact helpers, `test_notebook_parity.py`, `test_companion_parity.py`, and
+unit suite (`tests/`: snapshot, role and weight-fact helpers, `test_notebook_parity.py`, `test_external_artifact_section.py`, and
 `test_notebook_review_fixes.py`, which execs the notebooks' own cells with stand-ins and runs the model-free stages; no
-weights, no model). `tools/build_sample_bundle.py --check` reproduces `examples/sample-bundle/` byte for byte. These are
+weights, no model). These are
 source/provenance and unit checks. They are **not** execution evidence.
 
 ## Executor paths
@@ -101,14 +112,13 @@ Before changing the registry status from `Candidate` to `Release-grade`:
    - `outputs/tabiclv2_classifier_evaluation_report.json` with verdict `sample-sanity`;
    - eight held-out rows scored into `outputs/tabiclv2_classifier_predictions.csv`, and their unlabelled copy
      `outputs/tabiclv2_classifier_new_rows.csv`;
-   - the bundle `outputs/tabiclv2_classifier_artifact.zip` written with its SHA-256 printed and
-     `matches_pinned_sample_context` reported, reloaded in a fresh process with identical labels and equivalent
-     probabilities;
-6. in a **second** clean runtime, run the exact companion notebook revision with its defaults (the pinned sample bundle and
-   rows; no upload) and confirm `trusted_digest: verified`, `mode: pretrained`, the checkpoint binding, 341 context rows, and
-   the `not-measurable` report; then set `ARTIFACT_ZIP_PATH` to a copy of the E2E bundle, `EXPECTED_ZIP_SHA256` to the
-   digest the E2E run printed and `NEW_DATA_PATH` to its `..._new_rows.csv`, and confirm the same checks pass before
-   reconstruction;
+   - the bundle `outputs/tabiclv2_classifier_artifact.zip` written with its SHA-256 printed, reloaded in a fresh process
+     with identical labels and equivalent probabilities;
+6. in the same run, confirm the closing external-artifact section (Section 10): the pinned URL and SHA-256 printed before the
+   download, `trusted_digest: verified (pinned SAMPLE_ARTIFACT_SHA256)`, `zip_sha256` `2dc82d55…`, `mode: pretrained` with the
+   checkpoint bound to the base, `data_contract` matching the MAGIC default path, 3,000 context rows, eight MAGIC rows scored,
+   and `outputs/external_artifact/tabiclv2_classifier_external_predictions.csv` and `..._external_result.json` written. A
+   tampered or wrong pin must stop the run before extraction;
 7. verify the exports exist and the interpretation sections match the observed paths;
 8. record the notebook Git blob ids, commit, runtime (platform, Python, PyTorch, tabicl, device), model identifier and
    immutable revision, whether the model cache was clean, `restarted: false`, outcome, produced outputs and metrics, and any
@@ -204,8 +214,53 @@ reads nothing.
   this size: the exported system is the pretrained checkpoint, which fine-tuning never touches, and the closest configuration is
   about 0.0006 better on validation against the 0.005 tolerance. Owner ruling (2026-10-20): disclose and merge; the remaining op
   is tracked as a follow-up. The artifact ZIP (`2dc82d55…`) is the first written by the deterministic exporter.
-- **Fresh-test looks so far:** two, the evaluation of record and reproduction 1 above. No CPU development look was taken: the
+- **Reproduction 2 and the producing run of the sample artifact (hosted Colab T4, 2026-10-21, `383ca04` / blob `baf03478`).**
+  The default path of `tutorials/tabiclv2_classifier_colab.ipynb` at `main` `383ca04` (blob `baf03478`), run by the Colab CLI
+  (`colab exec -f`, 0.7.4) on a fresh hosted T4 session, started 2026-10-21T22:56:07Z, wall 363.3 s, exit 0, input unchanged,
+  12/12 code cells, verdict PASS. Evidence:
+  [`execution-evidence/2026-10-21-383ca04/`](execution-evidence/2026-10-21-383ca04/). It is labelled `reproduction` (the
+  second in a new runtime; the runtime-local report file is named `..._fresh_test_reproduction_1.json`), selects `pretrained`
+  and reproduces every reported result: fresh-test difference 0.0, 95 % CI [0, 0], **same model (Δ = 0)**; accuracy 0.8993
+  (Wilson [0.8831, 0.9136]). Like reproduction 1 it prints `matches_record: False`, `differs: ['grid_hash']` (`2aa9e0cd…`,
+  the same value as reproduction 1; the known residual drift, issue #28); the verdict is unchanged. Its deterministic export
+  `outputs/tabiclv2_classifier_artifact.zip` (SHA-256 `2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c`,
+  102,793,443 bytes) is published unchanged as the release asset of tag `sample-artifact-magic-v1` (target `383ca04`), whose
+  notes name this run (SART8). It is the pinned default artifact of the external-artifact section (Section 10) from the
+  Notebook Spec 3.0 fold on; it is not evidence for the migrated notebook, which needs its own hosted run.
+- **Reproduction 3 and the first hosted run of the migrated notebook (hosted Colab T4, 2026-10-21, `1bca212` / blob
+  `822549fb`, Notebook Spec 3.0).** The default path of the folded E2E notebook on PR #29, run by the Colab CLI (`colab exec -f`)
+  on a fresh hosted T4 session, started 2026-10-21T23:20:35Z, wall 397.8 s, exit 0, input unchanged; executed cell sources
+  equal blob `822549fb` (48 cells), verdict PASS. Evidence:
+  [`execution-evidence/2026-10-21-1bca212/`](execution-evidence/2026-10-21-1bca212/). The fresh test is labelled
+  `reproduction`, selects `pretrained` and repeats every reported result; like reproductions 1 and 2 it differs from the record
+  only in `grid_hash` (issue #28). **Section 10 (external artifact) ran end to end on the default path:** it downloaded the
+  pinned release asset of tag `sample-artifact-magic-v1`, verified SHA-256
+  `2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c` before extraction, confirmed the checkpoint binding,
+  rebuilt the classifier from the files alone, scored the sample MAGIC rows and wrote
+  `outputs/external_artifact/tabiclv2_classifier_external_predictions.csv` and `..._external_result.json` (printed in the
+  executed notebook; the files stayed on the released VM). This is the second pass of §32.2 for this pipeline.
+- **Fresh-test looks so far:** four, the evaluation of record and reproductions 1–3 above. No CPU development look was taken: the
   fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
+
+**Local-path redaction of the reproduction 3 evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
+
+| File (under `execution-evidence/2026-10-21-1bca212/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_1bca212_colab-cli-t4.ipynb` | `9703397cc8e3ceaf45f5b80258e396c66ebdfa0c1a28084f42e698ae4f352a9e` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_1bca212_colab-cli-t4_run_summary.json` | `5e31302c63f219c658d1f663baf1a5f06d54b8f571b9f20c3ebea96dbfdad27a` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_1bca212_colab-cli-t4_exec.log` | `00cc231d30ce86fa7527ae1a1591646e7ead49299ba1c1461edd37c0753add3b` | `153da19297dde235c9b7b8863924e69e46faf76245d84fba3f5665bdee29565e` (2 replacements) |
+| `tabiclv2_classifier_colab_1bca212_colab-cli-t4_suite.log` | `037acf788819871be31f08b74be34fa8afb8225edec5d8ee22aaa09760968cb4` | `aeffd16c551f0d329b0ad569b157b601bc7f8b1f60ff88b28cc81318229e206a` (4 replacements) |
+
+**Local-path redaction of the reproduction 2 evidence.** Local paths were replaced by `<local-run-dir>/` before the first
+commit. The 102,793,443-byte artifact ZIP is not committed here; it is the release asset.
+
+| File (under `execution-evidence/2026-10-21-383ca04/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4.ipynb` | `4dd5ebc255d3b6319be31d27cba68241d1ffd2798e0e70cc0ee9fc4c6af398c6` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4_exec.log` | `b4f51655caa5ac961b065cccdf32e0436ac32a2ce85ff4d2316636cf72dd1dbd` | `df81c9a2c9b1aa405d30df11a5f23de003f4ce9ece0f00ce9c76071e4ca58072` |
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4_run_summary.json` | `3705679994220e272ca2c8df59340a6910631d0de6e410a7f37bc6e372ec98b9` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4_fresh_test_reproduction_1.json` | `32e10e087964b11cad3a04d296441fc07294b837d6cb9522db6bb52c0003be89` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_383ca04_colab-cli-t4_suite.log` | `bb50d38b0d8a9d19563680d4ffb9f98063ed5a48d8ee72efc79cbb22dd8514a8` | `a992ed43af67a6514c9db2065b5ed9bb90673a95d5de62e3061ac679893177ea` |
 
 **Local-path redaction of the reproduction evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
 

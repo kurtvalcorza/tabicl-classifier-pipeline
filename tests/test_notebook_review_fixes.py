@@ -2,8 +2,9 @@
 
 They need only CI's dependencies (no torch, no tabicl, no lightgbm, no checkpoint): they exec the notebooks' own kernel
 cells with stand-ins for `run_stage` and `google.colab`, run the stage runners' model-free parts (`data`, `validate`,
-the sample-bundle assembly, `rows`, the trusted-digest and binding checks) in-process, and check the generated
-notebooks statically. Each test names its finding.
+and check the generated notebook statically. The artifact-inference companion they also covered (TICA-*) was folded
+into the E2E notebook's external-artifact section under NOTEBOOK_SPEC 3.0; its checks now live in
+`tests/test_external_artifact_section.py`. Each test names its finding.
 """
 # ruff: noqa: E501
 
@@ -19,7 +20,6 @@ import re
 import shutil
 import sys
 import types
-import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -28,8 +28,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
 E2E = ROOT / "tutorials" / "tabiclv2_classifier_colab.ipynb"
-AI = ROOT / "tutorials" / "tabiclv2_classifier_artifact_inference_colab.ipynb"
-SAMPLE = ROOT / "examples" / "sample-bundle"
 
 
 def _load(name: str, path: Path):
@@ -41,7 +39,6 @@ def _load(name: str, path: Path):
 
 
 STAGES = _load("tic_tutorial_stages", TOOLS / "tutorial_stages.py")
-AI_STAGES = _load("tic_tutorial_stages_ai", TOOLS / "tutorial_stages_artifact_inference.py")
 
 
 def _nb(path: Path) -> dict:
@@ -131,7 +128,7 @@ def _breast_cancer() -> pd.DataFrame:
 # ---------------------------------------------------------------- TIC-M1 / TICA-M2: isolated runtime
 
 
-@pytest.mark.parametrize("path", [E2E, AI], ids=["TIC-M1", "TICA-M2"])
+@pytest.mark.parametrize("path", [E2E], ids=["TIC-M1"])
 def test_m1_no_kernel_install_and_no_restart_instruction(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     assert "Restart the runtime" not in text and "restart the runtime" not in text.replace("no runtime restart", "")
@@ -153,7 +150,7 @@ def _exec_check_cell(ns: dict, path: Path, **overrides) -> None:
         exec(compile(src, "<check>", "exec"), ns)
 
 
-@pytest.mark.parametrize("path", [E2E, AI], ids=["TIC-M1", "TICA-M2"])
+@pytest.mark.parametrize("path", [E2E], ids=["TIC-M1"])
 def test_m1_section1_is_idempotent(path: Path, tmp_path, monkeypatch) -> None:
     """Re-running the Section 1 cell keeps the run directory, so later cells are not stranded."""
     monkeypatch.chdir(tmp_path)
@@ -229,7 +226,7 @@ def test_M2_fine_tuning_runs_on_the_default_path_bounded_and_cpu_skip_is_recorde
 GUIDED = ("## How to use this notebook", "**Who this notebook is for.**", "## The task: Input → Model → Output", "## Roadmap", "<summary><strong>Glossary</strong>", "Predict before running", "**What to notice:**", "Check your reasoning", "## Troubleshooting", "## Conclusion")
 
 
-@pytest.mark.parametrize("path", [E2E, AI], ids=["TIC-M3", "TICA-M3"])
+@pytest.mark.parametrize("path", [E2E], ids=["TIC-M3"])
 def test_m3_guided_layer_and_collapsed_infrastructure(path: Path) -> None:
     nb = _nb(path)
     md = "\n".join(_src(c) for c in nb["cells"] if c["cell_type"] == "markdown")
@@ -250,15 +247,15 @@ def test_M3_wine_activity_is_the_guided_comparison_and_writes_only_to_its_direct
     assert 'write_output(f"activity/' in body and "before != after" in body and "one_row_resolution" in body
 
 
-def test_TICA_M3_every_bundle_refusal_has_a_troubleshooting_row() -> None:
-    """TICA-M3: the troubleshooting table names the refusals the artifact stage can raise."""
-    md = "\n".join(_src(c) for c in _nb(AI)["cells"] if c["cell_type"] == "markdown")
+def test_TICA_M3_every_external_artifact_refusal_has_a_troubleshooting_row() -> None:
+    """TICA-M3 (carried into the E2E external-artifact section): the troubleshooting table names its refusals."""
+    md = "\n".join(_src(c) for c in _nb(E2E)["cells"] if c["cell_type"] == "markdown")
     table = md[md.index("## Troubleshooting"):]
-    for message in ("Trusted digest mismatch", "Unexpected or missing artifact files", "pinned base checkpoint", "non-numeric value"):
+    for message in ("Trusted digest mismatch", "default data contract (SART10)", "external_artifact.json is missing", "is numeric except for"):
         assert message in table, message
 
 
-@pytest.mark.parametrize("runner", ["tutorial_stages.py", "tutorial_stages_artifact_inference.py"])
+@pytest.mark.parametrize("runner", ["tutorial_stages.py"])
 def test_no_quality_assert_in_stage_runners(runner: str) -> None:
     tree = ast.parse((TOOLS / runner).read_text(encoding="utf-8"))
     assert not [n for n in ast.walk(tree) if isinstance(n, ast.Assert)]
@@ -366,159 +363,3 @@ def test_m3_no_unrecorded_development_numbers_and_validator_difference_is_stated
 
 
 # ---------------------------------------------------------------- TICA-M1: pinned sample bundle, default path
-
-
-def test_M1_sample_bundle_is_reproduced_byte_for_byte() -> None:
-    """TICA-M1: tools/build_sample_bundle.py reproduces examples/sample-bundle/ exactly (no model is run)."""
-    builder = _load("tic_build_sample_bundle", TOOLS / "build_sample_bundle.py")
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        assert builder.main(["--check"]) == 0
-
-
-def test_M1_sample_rows_are_the_e2e_new_rows(tmp_path) -> None:
-    """TICA-M1 / TIC-S2: the carried rows are the E2E notebook's first eight holdout rows of the Breast Cancer source (the earlier default, which the pinned sample bundle carries), which the support set does not contain."""
-    run = _run(tmp_path / "run", tmp_path / "outputs", {"data_source": "Sample: Breast Cancer"})
-    _quiet(STAGES.stage_data, run)
-    _quiet(STAGES.stage_validate, run)
-    enc = run.read_state("encoded.json", "t")
-    rows = STAGES.new_rows_frame(run, enc)
-    pinned = pd.read_csv(SAMPLE / "new_rows.csv")
-    pd.testing.assert_frame_equal(rows.reset_index(drop=True), pinned, check_dtype=False)
-    assert not set(pinned["row_id"]) & set(enc["train_row_ids"])
-
-
-def test_M1_companion_default_path_uses_the_sample_without_upload(tmp_path, monkeypatch) -> None:
-    """TICA-M1: all fields at their defaults run the pinned sample bundle and rows; google.colab is never imported."""
-    _no_colab(monkeypatch)
-    ns, calls = _kernel(tmp_path)
-    exec(compile(_cell_with(AI, "ARTIFACT_ZIP_PATH = ''  # @param"), "<s4>", "exec"), ns)
-    exec(compile(_cell_with(AI, "NEW_DATA_PATH = ''  # @param"), "<s6>", "exec"), ns)
-    assert calls == [("artifact", {"source": "sample", "zip_path": "", "expected_zip_sha256": ""}), ("rows", {"source": "sample", "path": ""})]
-
-
-def _ai_root(tmp_path: Path) -> Path:
-    root = tmp_path / "run"
-    root.mkdir(parents=True)
-    (root / "src").symlink_to(ROOT / "src", target_is_directory=True)
-    shutil.copytree(SAMPLE, root / "sample-bundle")
-    return root
-
-
-def test_M1_sample_bundle_assembles_with_the_verified_base_checkpoint(tmp_path) -> None:
-    """TICA-M1: the sample's artifact.json is checked against its pinned digest, and the base checkpoint becomes best.ckpt."""
-    root = _ai_root(tmp_path)
-    run = AI_STAGES.Run(root, tmp_path / "outputs", tmp_path / "weights", {"source": "sample"})
-    base = tmp_path / "weights" / "base.ckpt"
-    base.parent.mkdir(parents=True, exist_ok=True)
-    base.write_bytes(b"verified base checkpoint stand-in")
-    run.write_state("weights.json", {"checkpoint": str(base)})
-    P = AI_STAGES.package(root)
-    bundle = tmp_path / "bundle"
-    trust = AI_STAGES.assemble_sample(run, P, bundle)
-    record = json.loads((SAMPLE / "SAMPLE_BUNDLE.json").read_text())
-    assert trust["artifact_json_sha256"] == record["artifact_sha256"]
-    assert (bundle / "checkpoints" / "best.ckpt").read_bytes() == base.read_bytes()
-    assert (bundle / "training_context.parquet").read_bytes() == (SAMPLE / "training_context.parquet").read_bytes()
-    manifest = json.loads((bundle / "artifact.json").read_text())
-    assert AI_STAGES.check_bundle_identity(P, manifest)["mode"] == "pretrained"
-    (root / "sample-bundle" / "artifact.json").write_text("{}")
-    with pytest.raises(ValueError, match="Trusted digest mismatch for artifact.json"):
-        AI_STAGES.assemble_sample(run, P, tmp_path / "bundle2")
-
-
-# ---------------------------------------------------------------- TICA-m1: ZIP by path + rows by upload
-
-
-def test_m1_zip_by_path_with_rows_by_upload_has_no_name_error(tmp_path, monkeypatch) -> None:
-    """TICA-m1: ARTIFACT_ZIP_PATH set, NEW_DATA_PATH empty: outside Colab a message naming NEW_DATA_PATH (no NameError);
-    in Colab the dialog opens."""
-    artifact_cell = _set(_cell_with(AI, "ARTIFACT_ZIP_PATH = ''  # @param"), "ARTIFACT_ZIP_PATH", "/d/bundle.zip")
-    rows_cell = _cell_with(AI, "NEW_DATA_PATH = ''  # @param")
-    _no_colab(monkeypatch)
-    ns, calls = _kernel(tmp_path)
-    exec(compile(artifact_cell, "<s4>", "exec"), ns)
-    with pytest.raises(RuntimeError, match="set NEW_DATA_PATH"):
-        exec(compile(rows_cell, "<s6>", "exec"), ns)
-    monkeypatch.undo()
-    with _colab([{"rows.csv": b"a\n1\n"}]) as files:
-        ns, calls = _kernel(tmp_path)
-        exec(compile(artifact_cell, "<s4>", "exec"), ns)
-        exec(compile(rows_cell, "<s6>", "exec"), ns)
-        assert files.calls == 1 and calls[1][0] == "rows" and calls[1][1]["source"] == "upload"
-        assert calls[1][1]["path"].endswith("inputs/rows.csv")
-
-
-# ---------------------------------------------------------------- TICA-M1 / TICA-m2: trusted digest, checkpoint binding
-
-
-def test_M1_wrong_trusted_zip_digest_is_refused_before_extraction(tmp_path, monkeypatch) -> None:
-    """TICA-M1 (trust): a ZIP whose SHA-256 differs from EXPECTED_ZIP_SHA256 is refused before anything is extracted."""
-    monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace(__version__="2.14.0", cuda=types.SimpleNamespace(is_available=lambda: False)))
-    root = _ai_root(tmp_path)
-    archive = tmp_path / "bundle.zip"
-    with zipfile.ZipFile(archive, "w") as zf:
-        zf.write(SAMPLE / "artifact.json", "artifact.json")
-    run = AI_STAGES.Run(root, tmp_path / "outputs", tmp_path / "weights", {"source": "path", "zip_path": str(archive), "expected_zip_sha256": "0" * 64})
-    observed = hashlib.sha256(archive.read_bytes()).hexdigest()
-    with pytest.raises(ValueError, match=f"EXPECTED_ZIP_SHA256 is {'0' * 64}, the supplied file's SHA-256 is {observed}.*nothing was extracted"):
-        _quiet(AI_STAGES.stage_artifact, run)
-    assert not (root / "state" / "bundle").exists()
-    run.options["expected_zip_sha256"] = "abc"
-    with pytest.raises(ValueError, match="must be 64 hexadecimal characters"):
-        _quiet(AI_STAGES.stage_artifact, run)
-
-
-def test_m2_pretrained_bundle_must_carry_the_base_checkpoint(tmp_path) -> None:
-    """TICA-m2: a `pretrained` bundle whose checkpoint digest is not BASE_MODEL_SHA256 is refused naming the expected digest."""
-    P = AI_STAGES.package(_ai_root(tmp_path))
-    manifest = json.loads((SAMPLE / "artifact.json").read_text())
-    swapped = json.loads(json.dumps(manifest))
-    swapped["digests"]["checkpointSha256"] = "f" * 64
-    with pytest.raises(RuntimeError, match=f"must be the pinned base checkpoint with SHA-256 {P.BASE_MODEL_SHA256}"):
-        AI_STAGES.check_bundle_identity(P, swapped)
-    swapped["mode"] = "fine-tuned"
-    assert "EXPECTED_ZIP_SHA256" in AI_STAGES.check_bundle_identity(P, swapped)["checkpoint_binding"]
-    other_base = json.loads(json.dumps(manifest))
-    other_base["baseModelSha256"] = "e" * 64
-    with pytest.raises(RuntimeError, match="not produced on the pinned base checkpoint"):
-        AI_STAGES.check_bundle_identity(P, other_base)
-
-
-# ---------------------------------------------------------------- TICA-m3: numeric features, sample_kind
-
-
-def _rows_run(tmp_path: Path, art_source: str, options: dict):
-    root = _ai_root(tmp_path)
-    run = AI_STAGES.Run(root, tmp_path / "outputs", tmp_path / "weights", options)
-    manifest = json.loads((SAMPLE / "artifact.json").read_text())
-    run.write_state("artifact.json", {"source": art_source, "manifest": manifest})
-    return run, root
-
-
-def test_m3_non_numeric_value_in_a_numeric_feature_is_refused_in_the_rows_stage(tmp_path) -> None:
-    """TICA-m3: `abc` in `mean radius` stops in the rows stage naming the column and the value."""
-    rows = pd.read_csv(SAMPLE / "new_rows.csv").astype({"mean radius": object})
-    rows.loc[2, "mean radius"] = "abc"
-    path = tmp_path / "mine.csv"
-    rows.to_csv(path, index=False)
-    run, root = _rows_run(tmp_path, "path", {"source": "path", "path": str(path)})
-    with pytest.raises(ValueError, match=r"mine\.csv: numeric feature 'mean radius' has 1 non-numeric value\(s\), e\.g\. \['abc'\]"):
-        _quiet(AI_STAGES.stage_rows, run)
-    assert not (root / "state" / "rows.parquet").exists()
-
-
-def test_m3_sample_kind_follows_the_input_source(tmp_path) -> None:
-    """TICA-m3: sample rows on the sample bundle are `sample`; the user's rows are `BYOD`; sample rows on a user bundle are refused."""
-    run, root = _rows_run(tmp_path, "sample", {"source": "sample"})
-    _quiet(AI_STAGES.stage_rows, run)
-    state = json.loads((root / "state" / "rows.json").read_text())
-    assert (state["sample_kind"], state["rows"], state["extra_columns"]) == ("sample", 8, ["row_id"])
-    path = tmp_path / "mine.csv"
-    pd.read_csv(SAMPLE / "new_rows.csv").to_csv(path, index=False)
-    run.options = {"source": "path", "path": str(path)}
-    _quiet(AI_STAGES.stage_rows, run)
-    assert json.loads((root / "state" / "rows.json").read_text())["sample_kind"] == "BYOD"
-    run.write_state("artifact.json", {"source": "path", "manifest": json.loads((SAMPLE / "artifact.json").read_text())})
-    run.options = {"source": "sample"}
-    with pytest.raises(ValueError, match="The pinned sample rows match only the pinned sample bundle"):
-        _quiet(AI_STAGES.stage_rows, run)
