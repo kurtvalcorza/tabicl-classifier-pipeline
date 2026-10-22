@@ -248,7 +248,23 @@ reads nothing.
   The record comparison printed `stage_runner_sha256` record `cc604098…` vs this run `ee759496…`, `same_stage_runner: False`,
   `grid_hash: 'not comparable across revisions (…)'` and **`matches_record: True`, `differs: []`**; this run's grid hash was
   `2aa9e0cd…`. Section 10 verified the pinned asset `2dc82d55…` as before.
-- **Fresh-test looks so far:** five, the evaluation of record and reproductions 1–4 above. No CPU development look was taken: the
+- **Reproduction 5: optional-activity run (hosted Colab T4, 2026-10-22, `edbe94d` / committed blob `f21920ab`,
+  `RUN_ACTIVITY = True`).** A run copy of committed blob `f21920ab` with one override, `RUN_ACTIVITY = False` → `True` (run copy
+  blob `a69defdd91f5`, SHA-256 `18c889577b602df042fb54f779579a3a84f2e56dfe810e0a28f42e1bd9458625`; it differs from the committed
+  blob only in that assignment literal and is committed beside the evidence as `…_activity_run_copy.ipynb`), run by Colab CLI
+  0.7.5 `colab exec -f` (a scripted run, not a browser Run all) on a fresh T4, started 2026-10-22T13:24:55Z, wall 480.6 s, exit 0,
+  sequential, input (the run copy) unchanged, 15/15 code cells, 0 errors, verdict PASS. Evidence:
+  [`execution-evidence/2026-10-22-edbe94d-activity/`](execution-evidence/2026-10-22-edbe94d-activity/). The fresh test was not masked (`DIMER_MASK_FRESH_TEST = unset`); it is
+  labelled `reproduction`, selects `pretrained` and repeats every reported result (difference 0.0, CI [0, 0], **same model
+  (Δ = 0)**, accuracy 0.8993), with `same_stage_runner: False` against the record and **`matches_record: True`, `differs: []`**.
+  The export reloaded with `labels_identical: True`, and Section 10 verified the pinned asset `2dc82d55…`. The Section 11 Wine
+  activity printed `'activity_sample': 'sklearn-wine'`, 36 holdout rows (`one_row_resolution` 0.0278), TabICL pretrained holdout
+  accuracy 0.9722 / balanced accuracy 0.9762 / log loss 0.0518 / ROC AUC 1.0 against the majority-class baseline's accuracy
+  0.3889, and `{'canonical_outputs_unchanged': True}`. **Grid hash:** this run printed `grid_hash` `4b1bf536…`, while the
+  `d4172f5` run of the same blob and the same carried runner (`ee759496…`) printed `2aa9e0cd…` (both values are in the committed
+  executed notebooks). This does not fit the *Issue #28* finding below that the grid hash is bit-exact per runner revision; it is
+  recorded here as observed and left to the integrator.
+- **Fresh-test looks so far:** six, the evaluation of record and reproductions 1–5 above. No CPU development look was taken: the
   fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
 
 ### Issue #28: the grid hash is bit-exact per stage-runner revision (2026-10-22)
@@ -300,6 +316,16 @@ every reproduction of this record reports the grid hash as not comparable. Repro
 **Pre-registration.** No amendment. The pre-registered check, two masked runs under amendment 2 with identical grid hashes,
 compared runs at one revision (96m3 and 96m4 at `b66a30f`), and it holds. The pre-registration does not require reproductions at
 other revisions to match the record's grid hash.
+
+**Local-path redaction of the reproduction 5 (optional-activity) evidence.** Local paths were replaced by `<local-run-dir>` before the
+first commit.
+
+| File (under `execution-evidence/2026-10-22-edbe94d-activity/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_edbe94d_colab-cli-t4_activity.ipynb` | `589449a1b829e13fd21c3656c1dcf669d6959cca6c210c04afe027bd75dfa78b` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_edbe94d_colab-cli-t4_activity_exec.log` | `3dcb60b33bdf177b1d812d5a591672865547db72c139b4a2b7a8b8ebf65c3df2` | `89424dfb2576485670930f98fd0b87d17d6c3b81ee0979d315c160d4117e8a69` (2 replacements) |
+| `tabiclv2_classifier_colab_edbe94d_colab-cli-t4_activity_run_summary.json` | `c590f8c3ba197c8cb907dac3489660e8e5b1b07404dcc5cb518380beee4ca104` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_edbe94d_colab-cli-t4_activity_run_copy.ipynb` | `18c889577b602df042fb54f779579a3a84f2e56dfe810e0a28f42e1bd9458625` | unchanged (no local path) |
 
 **Local-path redaction of the reproduction 4 evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
 
@@ -381,11 +407,10 @@ unredacted path remains in the repository's earlier history, which is not rewrit
 
 ## Current status
 
-**Current status (2026-10-22): Candidate.** The current E2E notebook blob is `f21920ab` (`tutorials/tabiclv2_classifier_colab.ipynb` at `d4172f5`, unchanged on `main` at `c4446a6`). Its default path has one recorded hosted run of this blob: the `d4172f5` record (reproduction 4) under *Fresh-test evaluation*, evidence in `execution-evidence/2026-10-22-d4172f5/`. It ran by Colab CLI `colab exec -f` (scripted, not a browser Run all) on a fresh Colab Tesla T4: exit 0, 15/15 code cells, 0 error outputs, 523.6 s, input unchanged, verdict PASS. In that run the pre-registered fine-tuning grid ran and kept the pretrained model, so the fine-tuned-checkpoint export path was again not exercised; the fresh test reproduced the record (Δ = 0.0, `matches_record: True`); the export reloaded with identical labels; and Section 10 verified the pinned `sample-artifact-magic-v1` asset (`2dc82d55…`) before extraction. The notebook stays **Candidate** until these are recorded for this blob:
+**Current status (2026-10-22): Candidate.** The current E2E notebook blob is `f21920ab` (`tutorials/tabiclv2_classifier_colab.ipynb` at `d4172f5`, unchanged on `main` at `c4446a6`). Its default path has one recorded hosted run of this blob: the `d4172f5` record (reproduction 4) under *Fresh-test evaluation*, evidence in `execution-evidence/2026-10-22-d4172f5/`. It ran by Colab CLI `colab exec -f` (scripted, not a browser Run all) on a fresh Colab Tesla T4: exit 0, 15/15 code cells, 0 error outputs, 523.6 s, input unchanged, verdict PASS. In that run the pre-registered fine-tuning grid ran and kept the pretrained model, so the fine-tuned-checkpoint export path was again not exercised; the fresh test reproduced the record (Δ = 0.0, `matches_record: True`); the export reloaded with identical labels; and Section 10 verified the pinned `sample-artifact-magic-v1` asset (`2dc82d55…`) before extraction. The optional-activity gate (the owner's 2026-10-22 ruling that the Section 11 Wine activity runs once on the current blob before promotion) is satisfied by reproduction 5, the `edbe94d` optional-activity run (`RUN_ACTIVITY = True` run copy of this blob, Colab CLI 0.7.5, fresh T4, PASS, evidence in `execution-evidence/2026-10-22-edbe94d-activity/`). The notebook stays **Candidate** until these two are recorded for this blob:
 
 - **REL12:** a BYOD run in which one representative input is accepted through the downstream stages and one incompatible input is refused;
-- **REL2:** a browser run of the interactive journeys (BYOD upload dialog, optional-activity toggle, own-artifact ZIP); the scripted CLI run counts for the default path only;
-- **Optional activity:** a run of the Section 11 Wine activity (`RUN_ACTIVITY`); the `d4172f5` run printed "Optional activity skipped". The owner ruled on 2026-10-22 that it must be run before promotion.
+- **REL2:** a browser run of the interactive journeys (BYOD upload dialog, optional-activity toggle, own-artifact ZIP); the scripted CLI runs count for the default path and the activity only.
 
 Promotion is an integrator decision; the builder does not change the status.
 
