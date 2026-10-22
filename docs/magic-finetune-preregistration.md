@@ -169,3 +169,25 @@ backward pass is not bitwise deterministic; deterministic mode does not refuse i
 grid hashes before any run may score the fresh test. The failed pair above is history and is not a look. Data, grid configs,
 selection tolerance and reading rule are unchanged. The math backend is slower and uses more memory than the memory-efficient
 kernel; the T4 time estimate is re-measured by the new masked runs.
+
+## Amendment 3 (2026-10-23), after the fresh test was scored
+
+**Timing, disclosed.** Unlike amendments 1 and 2, this one is written after the run of record scored the fresh test and after
+several reproductions. It changes no setting that produced the record: the data, the grid configs, the determinism settings of
+amendment 2, the selection tolerance, the reading rule and the recorded result all stay as they are. It changes only the gate a
+**future** run of record must pass.
+
+**Why.** Amendment 2 required two masked hosted T4 runs to print identical grid hashes. With the MATH attention backend and every
+determinism flag set, the fp16 grid hash still varies run to run on the T4 at an identical revision. Four hosted T4 runs of two
+blobs, with each blob's stage runner fixed, printed `2aa9e0cd…` and `4b1bf536…` in alternation: reproductions 4 and 5 (blob
+`f21920ab`) and 6 and 7 (blob `515f8954`) in `docs/release-verification.md`. Every one of them kept the same selection and
+reproduced every fresh-test value of the record exactly (`matches_record: True`, no differences). An identical-hash gate can
+therefore fail by chance without any change in what the grid decides (issue #28, fixed in #33).
+
+**Change.**
+1. The masked determinism check passes when two masked hosted T4 runs reach the **same selection under section 4**: the same
+   selected label, and the same eligibility of each config under amendment 1, item 3. Their grid hashes are printed and recorded
+   but no longer compared.
+2. A reproduction of the run of record (fresh test not masked) matches when the selection, the device and every fresh-test value
+   equal the record exactly. The grid hash is reported for information only. This is what `compare_with_record` checks from #33 on.
+3. Amendment 2's identical-hash requirement is withdrawn. Amendment 2 stays in place above as history.
