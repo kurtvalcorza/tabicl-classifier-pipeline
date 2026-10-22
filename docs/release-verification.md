@@ -210,8 +210,8 @@ reads nothing.
   at step 1, 0.2437, then 0.3341 vs 0.3344 at step 2; C3 last-epoch validation log loss 0.2628 vs 0.2627), with the same torch
   2.14.0 / tabicl 2.1.1 / 90 locked packages, the MATH attention backend active and every determinism flag set. Three earlier
   hosted runs (96m3, 96m4, the record) agreed exactly; this one did not. It was first read as a residual non-deterministic step in
-  tabicl's fp16 fine-tuning on the T4; the 2026-10-22 finding below (issue #28) shows that it is not run-to-run variation: each
-  carried stage-runner revision reproduces its own grid hash bit for bit. The selection cannot flip on a difference of
+  tabicl's fp16 fine-tuning on the T4; PR #30 then attributed it to the stage-runner revision, and reproductions 4 and 5 (same
+  revision, two grid hashes) show that run-to-run variation does occur (issue #28, revised finding below). The selection cannot flip on a difference of
   this size: the exported system is the pretrained checkpoint, which fine-tuning never touches, and the closest configuration is
   about 0.0006 better on validation against the 0.005 tolerance. Owner ruling (2026-10-20): disclose and merge; the remaining op
   is tracked as a follow-up. The artifact ZIP (`2dc82d55…`) is the first written by the deterministic exporter.
@@ -262,16 +262,20 @@ reads nothing.
   accuracy 0.9722 / balanced accuracy 0.9762 / log loss 0.0518 / ROC AUC 1.0 against the majority-class baseline's accuracy
   0.3889, and `{'canonical_outputs_unchanged': True}`. **Grid hash:** this run printed `grid_hash` `4b1bf536…`, while the
   `d4172f5` run of the same blob and the same carried runner (`ee759496…`) printed `2aa9e0cd…` (both values are in the committed
-  executed notebooks). This does not fit the *Issue #28* finding below that the grid hash is bit-exact per runner revision; it is
-  recorded here as observed and left to the integrator.
+  executed notebooks). This is the observation that reopened issue #28: the grid hash varies run to run at an identical revision
+  (see *Issue #28* below).
 - **Fresh-test looks so far:** six, the evaluation of record and reproductions 1–5 above. No CPU development look was taken: the
   fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
 
-### Issue #28: the grid hash is bit-exact per stage-runner revision (2026-10-22)
+### Issue #28: the fp16 grid hash varies on the T4; it is reported, never compared (2026-10-23)
 
-**Finding.** Every hosted T4 run under amendment 2 reproduces the grid hash of the stage runner it carries, bit for bit, and two
-runner revisions print different grid hashes. The difference between reproductions 1–3 and the record is a revision effect, not
-run-to-run nondeterminism. Runner digest = SHA-256 of the carried `tutorial_stages.py` (UTF-8, LF), as stamped in the notebook's
+**Finding (revised 2026-10-23).** On a hosted Tesla T4 the fp16 fine-tuning grid hash has at least two outcomes for an identical
+revision. Two hosted runs of the same committed notebook blob `f21920ab`, carrying the same stage runner (`ee759496…`), printed
+different grid hashes: `d4172f5` (reproduction 4) printed `2aa9e0cd…` and `edbe94d` (reproduction 5, the optional activity runs
+after the grid) printed `4b1bf536…`. In both runs, and in every run in the table below, the selection outcome and every fresh-test
+value matched the record exactly. The first version of this section (PR #30) concluded that the hash was bit-exact per runner
+revision; reproduction 5 contradicts that, so that conclusion is withdrawn. The cause of the variation is not established
+(cuBLAS algorithm selection is plausible, not shown). The runs so far: runner digest = SHA-256 of the carried `tutorial_stages.py` (UTF-8, LF), as stamped in the notebook's
 `NOTEBOOK_SOURCE['files']['tutorial_stages.py']`; it was checked against `git show <rev>:tools/tutorial_stages.py`.
 
 | Run | Date (UTC) | Commit / notebook blob | Carried runner (source rev, SHA-256) | `grid_hash` |
@@ -283,6 +287,12 @@ run-to-run nondeterminism. Runner digest = SHA-256 of the carried `tutorial_stag
 | Reproduction 2 | 2026-10-21 | `383ca04` / `baf03478` | `bc7c606`, `9375a44d…` | `2aa9e0cd…` |
 | Reproduction 3 | 2026-10-21 | `1bca212` / `822549fb` | `d7426dc`, `6b64c594…` | `2aa9e0cd…` |
 | Confound breaker (masked) | 2026-10-22 (about 10:46–10:53) | `b66a30f` / `652c0015` | `15c1ae4`, `cc604098…` | `4b1bf536…` |
+| Reproduction 4 | 2026-10-22 (from 11:11) | `d4172f5` / `f21920ab` | `d4172f5`, `ee759496…` | `2aa9e0cd…` |
+| Reproduction 5 (activity) | 2026-10-22 (from 13:24) | `edbe94d` / `f21920ab` | `d4172f5`, `ee759496…` | `4b1bf536…` |
+
+Reproductions 4 and 5 carry the same blob and the same runner and print different grid hashes; that pair is the evidence for the
+revised finding. The paragraphs from *Confound breaker* to *Effect size* are the PR #30 analysis, kept as history; its revision
+explanation does not account for reproductions 4 and 5.
 
 The 96m3/96m4 suite logs carry blob `652c0015`; its `notebook_source` is `15c1ae4`, and `b66a30f` differs from `15c1ae4` only by the
 inserted mask cell. **Confound breaker.** Until 2026-10-22 revision and time were fully confounded: every `4b1bf536…` run was on
@@ -292,7 +302,7 @@ current image. That rules out an image change as the cause. A diagnostic run on 
 580.82.07, torch CUDA 13.0, cuDNN 92400, Tesla T4 (sm 7.5). It was a throwaway diagnostic revision with the grid in fp32, so it is
 not a reproduction, and its grid hash is not comparable.
 
-**What changed between the groups.** From `15c1ae4` to `bc7c606` only the stage runner changes (and template prose). The added
+**What changed between the groups (PR #30 analysis, superseded by reproductions 4 and 5).** From `15c1ae4` to `bc7c606` only the stage runner changes (and template prose). The added
 code (the record, `printed_reading`, `compare_with_record`, the deterministic ZIP writer) runs only in `fresh_test` and `export`,
 both after the grid. Seeds, determinism settings, grid, data, encoding, the lock and `src/` are unchanged. **Mechanism (inferred,
 not proven):** the size and content of the runner module change the process's allocation history and so the memory layout or
@@ -304,18 +314,18 @@ runner (a large change) still prints `2aa9e0cd…`, so not every code change mov
 in every run, and every fresh-test result is identical in every run (Δ = 0.0, accuracy 0.8993, ROC AUC 0.95, the same sensitivity
 verdict).
 
-**Consequence for the record check.** `RECORDED_EVALUATION` now names the runner that produced it
-(`stage_runner_sha256` `cc604098aa235653c2ef5b36cffbca37332539a9ac74e1b52912e1ff71184823`). `compare_with_record` compares
-`grid_hash` only when this run's runner digest equals the record's. Otherwise it prints
-`grid_hash: 'not comparable across revisions (<record digest> vs <this run's digest>)'` and does not count the hash as a
-difference. The selection, the device and every fresh-test value must still match exactly for `matches_record: True`. The comparison
-also prints both digests and `same_stage_runner`. A runner that carries the record can never be the runner that produced it, so
-every reproduction of this record reports the grid hash as not comparable. Reproductions 1–3 above would read
-`matches_record: True` under this rule.
+**Consequence for the record check (revised 2026-10-23).** `compare_with_record` never gates on `grid_hash`, whatever the stage
+runner. It prints `grid_hash` as `{'informational': …, 'record': <record's hash>, 'this_run': <this run's hash>, 'equal': True|False}`
+and never adds it to `differs`. The reproducibility claim is the exact match of the pre-registered selection outcome, the device and
+every fresh-test value, which all must match for `matches_record: True`. `RECORDED_EVALUATION` still names the runner that produced
+the record (`stage_runner_sha256` `cc604098aa235653c2ef5b36cffbca37332539a9ac74e1b52912e1ff71184823`, unchanged); both digests and
+`same_stage_runner` are printed for information and also never gate. Under PR #30's rule a record refreshed on runner `ee759496…`
+would have failed reproduction 4 or 5 on the grid hash alone; under this rule both read `matches_record: True`, as do reproductions
+1–3.
 
-**Pre-registration.** No amendment. The pre-registered check, two masked runs under amendment 2 with identical grid hashes,
-compared runs at one revision (96m3 and 96m4 at `b66a30f`), and it holds. The pre-registration does not require reproductions at
-other revisions to match the record's grid hash.
+**Pre-registration.** No amendment in this change. The amendment-2 check (two masked runs at one revision with identical grid
+hashes) was met by 96m3 and 96m4 at `b66a30f` before any run scored the fresh test. Reproductions 4 and 5 show that such agreement
+is not guaranteed on the T4, so the grid hash is not evidence of reproducibility on its own.
 
 **Local-path redaction of the reproduction 5 (optional-activity) evidence.** Local paths were replaced by `<local-run-dir>` before the
 first commit.
