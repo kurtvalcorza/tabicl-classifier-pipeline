@@ -240,7 +240,15 @@ reads nothing.
   rebuilt the classifier from the files alone, scored the sample MAGIC rows and wrote
   `outputs/external_artifact/tabiclv2_classifier_external_predictions.csv` and `..._external_result.json` (printed in the
   executed notebook; the files stayed on the released VM). This is the second pass of §32.2 for this pipeline.
-- **Fresh-test looks so far:** four, the evaluation of record and reproductions 1–3 above. No CPU development look was taken: the
+- **Reproduction 4: first hosted run of the revision-aware record check (hosted Colab T4, 2026-10-22, `d4172f5` / blob
+  `f21920ab`; PR #30, issue #28).** Colab CLI `colab exec -f` on a fresh T4, started 2026-10-22T11:11:21Z, wall 523.6 s, exit 0,
+  input unchanged; executed cell sources equal the blob (48 cells); verdict PASS. Evidence:
+  [`execution-evidence/2026-10-22-d4172f5/`](execution-evidence/2026-10-22-d4172f5/). The fresh test is labelled `reproduction`,
+  selects `pretrained` and repeats every reported result (difference 0.0, CI [0, 0], **same model (Δ = 0)**, accuracy 0.8993).
+  The record comparison printed `stage_runner_sha256` record `cc604098…` vs this run `ee759496…`, `same_stage_runner: False`,
+  `grid_hash: 'not comparable across revisions (…)'` and **`matches_record: True`, `differs: []`**; this run's grid hash was
+  `2aa9e0cd…`. Section 10 verified the pinned asset `2dc82d55…` as before.
+- **Fresh-test looks so far:** five, the evaluation of record and reproductions 1–4 above. No CPU development look was taken: the
   fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
 
 ### Issue #28: the grid hash is bit-exact per stage-runner revision (2026-10-22)
@@ -292,6 +300,15 @@ every reproduction of this record reports the grid hash as not comparable. Repro
 **Pre-registration.** No amendment. The pre-registered check, two masked runs under amendment 2 with identical grid hashes,
 compared runs at one revision (96m3 and 96m4 at `b66a30f`), and it holds. The pre-registration does not require reproductions at
 other revisions to match the record's grid hash.
+
+**Local-path redaction of the reproduction 4 evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
+
+| File (under `execution-evidence/2026-10-22-d4172f5/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_d4172f5_colab-cli-t4.ipynb` | `d622d5c1a62f92b156c39cc4a835e9fd32a9be502e8d5ae27f5f55fb829b2cca` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_d4172f5_colab-cli-t4_run_summary.json` | `021c4c56520981821ab9637eacdad37267a7cc02f3645d936e5c14988bb1c502` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_d4172f5_colab-cli-t4_exec.log` | `34d58d712543cddb9cb71eeb2a729e25a692cb8e2c32d8de1ec0bb41d89efd55` | `e11b9f84b7459a7266f63215b965254eebba74321d6caae46bad86bc2d041f86` |
+| `tabiclv2_classifier_colab_d4172f5_colab-cli-t4_suite.log` | `f47918d5facc93a2313a118f23dcd4b526d29d69b64b311fade9a754ed0229f4` | `e7ec4a629c09bd90215d224e28c21e2247b4d3d83e13db68a49928399b8d1ca2` |
 
 **Local-path redaction of the reproduction 3 evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
 
