@@ -583,7 +583,7 @@ def test_a_new_runtime_is_a_reproduction_and_prints_matches_record(tmp_path, sco
     comparison = repro["comparison_with_record"]
     assert comparison["reproduction_of"] == "2026-10-20 hosted T4, commit 9ea0888"
     # The stand-in's probabilities are not the model's, so its accuracy and AUC differ from the record and are named; the
-    # selection, grid hash, device and the "same model" reading match.
+    # selection, device and the "same model" reading match; the grid hash is never a difference (issue #28).
     assert comparison["matches_record"] is False
     assert {"selected", "grid_hash", "device", "reading.primary.delta", "reading.primary.verdict", "reading.sensitivity.n"}.isdisjoint(comparison["differs"])
     assert "reading.accuracy.pretrained" in comparison["differs"]
@@ -593,14 +593,14 @@ def test_compare_with_record_matches_the_recorded_values_and_names_each_differen
     rec = S.RECORDED_EVALUATION
     runner = rec["stage_runner_sha256"]
     same = S.compare_with_record("pretrained", rec["grid_hash"], "Tesla T4", dict(rec["reading"]), runner)
-    assert same == {"reproduction_of": "2026-10-20 hosted T4, commit 9ea0888", "stage_runner_sha256": {"record": runner, "this_run": runner}, "same_stage_runner": True, "grid_hash": "matches", "matches_record": True, "differs": []}
+    assert same == {"reproduction_of": "2026-10-20 hosted T4, commit 9ea0888", "stage_runner_sha256": {"record": runner, "this_run": runner}, "same_stage_runner": True, "grid_hash": {"informational": S.GRID_HASH_NOTE, "record": rec["grid_hash"], "this_run": rec["grid_hash"], "equal": True}, "matches_record": True, "differs": []}
     changed = S.compare_with_record("fine-tuned", "0" * 64, "Tesla T4", {**rec["reading"], "primary.delta": -0.01}, runner)
-    assert changed["matches_record"] is False and changed["differs"] == ["selected", "grid_hash", "reading.primary.delta"]
+    assert changed["matches_record"] is False and changed["differs"] == ["selected", "reading.primary.delta"]
     monkeypatch.setattr(S, "RECORDED_EVALUATION", None)
     assert S.compare_with_record("pretrained", rec["grid_hash"], "Tesla T4", {}) is None
 
 
-# ---------------------------------------------------------------- issue #28: grid hash compared only at the record's stage runner
+# ---------------------------------------------------------------- issue #28: the grid hash is reported, never compared
 
 OTHER_RUNNER = "6b64c59461035d497d164d8f6259c3673f5a6463c24f26cdf8a9db3de8b9e478"  # tools/tutorial_stages.py at d7426dc
 OTHER_GRID = "2aa9e0cd" + "0" * 56
@@ -619,26 +619,47 @@ def test_stage_runner_sha256_is_the_digest_the_notebook_stamps() -> None:
     assert S.stage_runner_sha256() != S.RECORDED_EVALUATION["stage_runner_sha256"]
 
 
-def test_same_runner_and_a_different_grid_hash_differs() -> None:
+def test_same_runner_with_a_different_grid_hash_and_equal_results_matches() -> None:
+    # The d4172f5 and edbe94d hosted T4 runs: same notebook blob, same stage runner, grid hashes 2aa9e0cd... and 4b1bf536...,
+    # identical selection and fresh-test values. That is a match.
     rec = S.RECORDED_EVALUATION
     out = S.compare_with_record("pretrained", OTHER_GRID, "Tesla T4", dict(rec["reading"]), rec["stage_runner_sha256"])
-    assert out["same_stage_runner"] is True and out["grid_hash"] == "differs"
-    assert out["matches_record"] is False and out["differs"] == ["grid_hash"]
+    assert out["same_stage_runner"] is True
+    assert out["matches_record"] is True and out["differs"] == []
+    assert out["grid_hash"] == {"informational": S.GRID_HASH_NOTE, "record": rec["grid_hash"], "this_run": OTHER_GRID, "equal": False}
 
 
-def test_other_runner_with_a_different_grid_hash_and_equal_results_matches_with_a_note() -> None:
+def test_other_runner_with_a_different_grid_hash_and_equal_results_matches() -> None:
     rec = S.RECORDED_EVALUATION
     out = S.compare_with_record("pretrained", OTHER_GRID, "Tesla T4", dict(rec["reading"]), OTHER_RUNNER)
     assert out["matches_record"] is True and out["differs"] == [] and out["same_stage_runner"] is False
-    assert out["grid_hash"] == f"not comparable across revisions ({rec['stage_runner_sha256']} vs {OTHER_RUNNER})"
+    assert out["grid_hash"]["equal"] is False and out["grid_hash"]["this_run"] == OTHER_GRID
     assert out["stage_runner_sha256"] == {"record": rec["stage_runner_sha256"], "this_run": OTHER_RUNNER}
 
 
-def test_other_runner_with_a_different_fresh_test_result_differs() -> None:
+@pytest.mark.parametrize("runner", ["record", "other"])
+@pytest.mark.parametrize("grid", ["record", "other"])
+def test_a_different_fresh_test_value_fails_whatever_the_runner_and_grid_hash(runner, grid) -> None:
     rec = S.RECORDED_EVALUATION
-    out = S.compare_with_record("pretrained", OTHER_GRID, "Tesla T4", {**rec["reading"], "accuracy.pretrained": 0.8987}, OTHER_RUNNER)
+    ghash = rec["grid_hash"] if grid == "record" else OTHER_GRID
+    rsha = rec["stage_runner_sha256"] if runner == "record" else OTHER_RUNNER
+    out = S.compare_with_record("pretrained", ghash, "Tesla T4", {**rec["reading"], "accuracy.pretrained": 0.8987}, rsha)
     assert out["matches_record"] is False and out["differs"] == ["reading.accuracy.pretrained"]
-    assert out["grid_hash"].startswith("not comparable across revisions")
+
+
+def test_the_grid_hash_is_labelled_informational_in_the_output() -> None:
+    rec = S.RECORDED_EVALUATION
+    out = S.compare_with_record("pretrained", OTHER_GRID, "Tesla T4", dict(rec["reading"]), rec["stage_runner_sha256"])
+    assert out["grid_hash"]["informational"].startswith("informational only, not compared")
+    assert "issue #28" in out["grid_hash"]["informational"]
+    assert "informational" in repr(out)  # the stage prints this dict as is
+    assert not any("grid" in d for d in out["differs"])
+
+
+def test_the_condition_stage_prints_the_grid_hash_as_informational() -> None:
+    src = (ROOT / "tools" / "tutorial_stages.py").read_text(encoding="utf-8")
+    assert 'print("grid hash (informational' in src
+    assert "digit for digit" not in src and "bit-exact" not in src
 
 
 def test_other_runner_with_a_different_selection_differs() -> None:

@@ -113,9 +113,11 @@ MASK_ENV = "DIMER_MASK_FRESH_TEST"
 # docs/release-verification.md with its evidence. Because a record exists, every pre-registered scoring of the fresh test, the
 # first in a new runtime included, is a "reproduction" and prints matches_record / differs against the printed values below.
 # The record kept the pretrained model, which is also what a CPU run (no grid) exports.
-# Issue #28: the grid hash is bit-exact run to run at a fixed carried stage runner, but two runner revisions that differ only in
-# code that runs after the grid printed different grid hashes on the same T4 image (4b1bf536... vs 2aa9e0cd...). So the record
-# carries the SHA-256 of the stage runner that produced it, and grid_hash is compared only when this run's runner is the same.
+# Issue #28: on a Tesla T4 the fp16 fine-tuning grid hash varies run to run even at an identical revision. Two hosted runs of the
+# same notebook blob (f21920ab) with the same carried stage runner (ee759496...), at commits d4172f5 and edbe94d, printed
+# 2aa9e0cd... and 4b1bf536...; their selection and every fresh-test value matched the record exactly. So grid_hash is reported
+# (record, this run, equal or not) as information only and never decides matches_record. The record still names the SHA-256 of
+# the stage runner that produced it, which is reported the same way.
 RECORDED_SELECTION: str = "pretrained"
 RECORDED_EVALUATION: dict[str, Any] | None = {
     "label": "pre-registered evaluation (this runtime)",
@@ -174,30 +176,29 @@ def stage_runner_sha256() -> str:
     return hashlib.sha256(Path(__file__).read_text(encoding="utf-8").replace("\r\n", "\n").encode("utf-8")).hexdigest()
 
 
+GRID_HASH_NOTE = "informational only, not compared: on a T4 the fp16 grid hash varies run to run at an identical revision (issue #28)"
+
+
 def compare_with_record(selected: str, grid_hash_value: str, device: str | None, values: dict[str, Any], runner_sha256: str | None = None) -> dict[str, Any] | None:
     """A reproduction against the evaluation of record: the fields that differ, by name. None when no record exists.
 
-    The grid hash is compared only when this run's stage runner is the one that produced the record (issue #28: it is bit-exact
-    per runner revision, not across revisions). Otherwise it is reported as not comparable and is not a difference; the
-    selection, the device and every fresh-test value must still match exactly."""
+    The selection, the device and every fresh-test value must match the record exactly. The grid hash is reported, with the
+    record's value, this run's value and whether they are equal, but is informational and never a difference, whatever the stage
+    runner (issue #28: on a T4 the fp16 grid hash has varied run to run at an identical revision). The stage-runner digests are
+    reported the same way."""
     if RECORDED_EVALUATION is None:
         return None
     current = runner_sha256 if runner_sha256 is not None else stage_runner_sha256()
     recorded_runner = RECORDED_EVALUATION.get("stage_runner_sha256")
-    same_runner = recorded_runner is None or recorded_runner == current
-    checked = [("selected", selected), ("device", device)] + ([("grid_hash", grid_hash_value)] if same_runner else [])
-    differs = [k for k, v in checked if RECORDED_EVALUATION.get(k) != v]
+    differs = [k for k, v in (("selected", selected), ("device", device)) if RECORDED_EVALUATION.get(k) != v]
     recorded = RECORDED_EVALUATION.get("reading") or {}
     differs += [f"reading.{k}" for k in recorded if values.get(k) != recorded[k]]
-    if same_runner:
-        grid_note = "matches" if RECORDED_EVALUATION.get("grid_hash") == grid_hash_value else "differs"
-    else:
-        grid_note = f"not comparable across revisions ({recorded_runner} vs {current})"
+    recorded_grid = RECORDED_EVALUATION.get("grid_hash")
     return {
         "reproduction_of": f"{RECORDED_EVALUATION.get('date')} hosted T4, commit {str(RECORDED_EVALUATION.get('commit'))[:7]}",
         "stage_runner_sha256": {"record": recorded_runner, "this_run": current},
-        "same_stage_runner": same_runner,
-        "grid_hash": grid_note,
+        "same_stage_runner": recorded_runner == current,
+        "grid_hash": {"informational": GRID_HASH_NOTE, "record": recorded_grid, "this_run": grid_hash_value, "equal": recorded_grid == grid_hash_value},
         "matches_record": not differs,
         "differs": differs,
     }
@@ -708,7 +709,9 @@ def settings_differing(settings: dict[str, Any]) -> list[str]:
 
 
 def grid_hash(grid: list[dict[str, Any]], selection: str, sdpa_backend: str | None) -> str:
-    """Fingerprint of the grid's outcome, so two runs (e.g. two masked hosted runs) can be compared digit for digit."""
+    """Fingerprint of the grid's outcome, printed and reported for information. On a T4 the fp16 grid has given different hashes
+    run to run at an identical revision (issue #28), so it never decides a reproduction; within one run it still checks that the
+    stored grid is the one the condition stage wrote."""
     def r(value):
         return None if value is None else round(float(value), 6)
 
@@ -909,7 +912,7 @@ def stage_condition(run: Run) -> None:
     print({"recommended_for_export": active_mode, "selection_basis": selection, "grid_hash": ghash, "device": name, "classes_": record["classes"]})
     if readout:
         print({"exploratory_readout": rounded(readout)})
-    print("grid hash (compare two masked runs digit for digit):", ghash)
+    print("grid hash (informational: on a T4 it can differ run to run at an identical revision, issue #28):", ghash)
 
 
 # --------------------------------------------------------------------------------------------------
