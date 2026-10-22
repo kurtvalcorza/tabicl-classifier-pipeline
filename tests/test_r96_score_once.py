@@ -591,9 +591,63 @@ def test_a_new_runtime_is_a_reproduction_and_prints_matches_record(tmp_path, sco
 
 def test_compare_with_record_matches_the_recorded_values_and_names_each_difference(monkeypatch) -> None:
     rec = S.RECORDED_EVALUATION
-    same = S.compare_with_record("pretrained", rec["grid_hash"], "Tesla T4", dict(rec["reading"]))
-    assert same == {"reproduction_of": "2026-10-20 hosted T4, commit 9ea0888", "matches_record": True, "differs": []}
-    changed = S.compare_with_record("fine-tuned", "0" * 64, "Tesla T4", {**rec["reading"], "primary.delta": -0.01})
+    runner = rec["stage_runner_sha256"]
+    same = S.compare_with_record("pretrained", rec["grid_hash"], "Tesla T4", dict(rec["reading"]), runner)
+    assert same == {"reproduction_of": "2026-10-20 hosted T4, commit 9ea0888", "stage_runner_sha256": {"record": runner, "this_run": runner}, "same_stage_runner": True, "grid_hash": "matches", "matches_record": True, "differs": []}
+    changed = S.compare_with_record("fine-tuned", "0" * 64, "Tesla T4", {**rec["reading"], "primary.delta": -0.01}, runner)
     assert changed["matches_record"] is False and changed["differs"] == ["selected", "grid_hash", "reading.primary.delta"]
     monkeypatch.setattr(S, "RECORDED_EVALUATION", None)
     assert S.compare_with_record("pretrained", rec["grid_hash"], "Tesla T4", {}) is None
+
+
+# ---------------------------------------------------------------- issue #28: grid hash compared only at the record's stage runner
+
+OTHER_RUNNER = "6b64c59461035d497d164d8f6259c3673f5a6463c24f26cdf8a9db3de8b9e478"  # tools/tutorial_stages.py at d7426dc
+OTHER_GRID = "2aa9e0cd" + "0" * 56
+
+
+def test_the_record_names_the_stage_runner_that_produced_it() -> None:
+    # Derived from git: sha256 of tools/tutorial_stages.py (LF) at 15c1ae4 / 9ea0888, which blob 947feb16 carries and stamps in
+    # NOTEBOOK_SOURCE['files']['tutorial_stages.py'].
+    assert S.RECORDED_EVALUATION["stage_runner_sha256"] == "cc604098aa235653c2ef5b36cffbca37332539a9ac74e1b52912e1ff71184823"
+
+
+def test_stage_runner_sha256_is_the_digest_the_notebook_stamps() -> None:
+    build = _load("r28_build_notebook", ROOT / "tools" / "build_notebook.py")
+    assert S.stage_runner_sha256() == build.sha256_text(build._text(ROOT / "tools" / "tutorial_stages.py"))
+    # This revision carries the record, so it is never the runner that produced it: its grid hash is reported as not comparable.
+    assert S.stage_runner_sha256() != S.RECORDED_EVALUATION["stage_runner_sha256"]
+
+
+def test_same_runner_and_a_different_grid_hash_differs() -> None:
+    rec = S.RECORDED_EVALUATION
+    out = S.compare_with_record("pretrained", OTHER_GRID, "Tesla T4", dict(rec["reading"]), rec["stage_runner_sha256"])
+    assert out["same_stage_runner"] is True and out["grid_hash"] == "differs"
+    assert out["matches_record"] is False and out["differs"] == ["grid_hash"]
+
+
+def test_other_runner_with_a_different_grid_hash_and_equal_results_matches_with_a_note() -> None:
+    rec = S.RECORDED_EVALUATION
+    out = S.compare_with_record("pretrained", OTHER_GRID, "Tesla T4", dict(rec["reading"]), OTHER_RUNNER)
+    assert out["matches_record"] is True and out["differs"] == [] and out["same_stage_runner"] is False
+    assert out["grid_hash"] == f"not comparable across revisions ({rec['stage_runner_sha256']} vs {OTHER_RUNNER})"
+    assert out["stage_runner_sha256"] == {"record": rec["stage_runner_sha256"], "this_run": OTHER_RUNNER}
+
+
+def test_other_runner_with_a_different_fresh_test_result_differs() -> None:
+    rec = S.RECORDED_EVALUATION
+    out = S.compare_with_record("pretrained", OTHER_GRID, "Tesla T4", {**rec["reading"], "accuracy.pretrained": 0.8987}, OTHER_RUNNER)
+    assert out["matches_record"] is False and out["differs"] == ["reading.accuracy.pretrained"]
+    assert out["grid_hash"].startswith("not comparable across revisions")
+
+
+def test_other_runner_with_a_different_selection_differs() -> None:
+    rec = S.RECORDED_EVALUATION
+    out = S.compare_with_record("fine-tuned", OTHER_GRID, "Tesla T4", dict(rec["reading"]), OTHER_RUNNER)
+    assert out["matches_record"] is False and out["differs"] == ["selected"]
+
+
+def test_without_an_explicit_runner_the_running_file_is_used() -> None:
+    rec = S.RECORDED_EVALUATION
+    out = S.compare_with_record("pretrained", rec["grid_hash"], "Tesla T4", dict(rec["reading"]))
+    assert out["stage_runner_sha256"]["this_run"] == S.stage_runner_sha256()

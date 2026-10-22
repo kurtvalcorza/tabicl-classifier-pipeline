@@ -113,6 +113,9 @@ MASK_ENV = "DIMER_MASK_FRESH_TEST"
 # docs/release-verification.md with its evidence. Because a record exists, every pre-registered scoring of the fresh test, the
 # first in a new runtime included, is a "reproduction" and prints matches_record / differs against the printed values below.
 # The record kept the pretrained model, which is also what a CPU run (no grid) exports.
+# Issue #28: the grid hash is bit-exact run to run at a fixed carried stage runner, but two runner revisions that differ only in
+# code that runs after the grid printed different grid hashes on the same T4 image (4b1bf536... vs 2aa9e0cd...). So the record
+# carries the SHA-256 of the stage runner that produced it, and grid_hash is compared only when this run's runner is the same.
 RECORDED_SELECTION: str = "pretrained"
 RECORDED_EVALUATION: dict[str, Any] | None = {
     "label": "pre-registered evaluation (this runtime)",
@@ -124,6 +127,9 @@ RECORDED_EVALUATION: dict[str, Any] | None = {
     "device": "Tesla T4",
     "selected": RECORDED_SELECTION,
     "grid_hash": "4b1bf5366b121dd2365c6c9b02408e1b825c247bb6636fee6d8fe35697b20692",
+    # SHA-256 of the carried tutorial_stages.py (UTF-8, LF) that produced the record: NOTEBOOK_SOURCE['files']['tutorial_stages.py']
+    # in blob 947feb16, equal to tools/tutorial_stages.py at 15c1ae4 (unchanged at 9ea0888).
+    "stage_runner_sha256": "cc604098aa235653c2ef5b36cffbca37332539a9ac74e1b52912e1ff71184823",
     "reading": {
         "primary.delta": 0.0,
         "primary.ci95": [0.0, 0.0],
@@ -163,14 +169,38 @@ def printed_reading(reading: dict[str, Any], sensitivity: dict[str, Any]) -> dic
     }
 
 
-def compare_with_record(selected: str, grid_hash_value: str, device: str | None, values: dict[str, Any]) -> dict[str, Any] | None:
-    """A reproduction against the evaluation of record: the fields that differ, by name. None when no record exists."""
+def stage_runner_sha256() -> str:
+    """SHA-256 of this stage runner as the notebook stamps it (UTF-8, LF): NOTEBOOK_SOURCE['files']['tutorial_stages.py']."""
+    return hashlib.sha256(Path(__file__).read_text(encoding="utf-8").replace("\r\n", "\n").encode("utf-8")).hexdigest()
+
+
+def compare_with_record(selected: str, grid_hash_value: str, device: str | None, values: dict[str, Any], runner_sha256: str | None = None) -> dict[str, Any] | None:
+    """A reproduction against the evaluation of record: the fields that differ, by name. None when no record exists.
+
+    The grid hash is compared only when this run's stage runner is the one that produced the record (issue #28: it is bit-exact
+    per runner revision, not across revisions). Otherwise it is reported as not comparable and is not a difference; the
+    selection, the device and every fresh-test value must still match exactly."""
     if RECORDED_EVALUATION is None:
         return None
-    differs = [k for k, v in (("selected", selected), ("grid_hash", grid_hash_value), ("device", device)) if RECORDED_EVALUATION.get(k) != v]
+    current = runner_sha256 if runner_sha256 is not None else stage_runner_sha256()
+    recorded_runner = RECORDED_EVALUATION.get("stage_runner_sha256")
+    same_runner = recorded_runner is None or recorded_runner == current
+    checked = [("selected", selected), ("device", device)] + ([("grid_hash", grid_hash_value)] if same_runner else [])
+    differs = [k for k, v in checked if RECORDED_EVALUATION.get(k) != v]
     recorded = RECORDED_EVALUATION.get("reading") or {}
     differs += [f"reading.{k}" for k in recorded if values.get(k) != recorded[k]]
-    return {"reproduction_of": f"{RECORDED_EVALUATION.get('date')} hosted T4, commit {str(RECORDED_EVALUATION.get('commit'))[:7]}", "matches_record": not differs, "differs": differs}
+    if same_runner:
+        grid_note = "matches" if RECORDED_EVALUATION.get("grid_hash") == grid_hash_value else "differs"
+    else:
+        grid_note = f"not comparable across revisions ({recorded_runner} vs {current})"
+    return {
+        "reproduction_of": f"{RECORDED_EVALUATION.get('date')} hosted T4, commit {str(RECORDED_EVALUATION.get('commit'))[:7]}",
+        "stage_runner_sha256": {"record": recorded_runner, "this_run": current},
+        "same_stage_runner": same_runner,
+        "grid_hash": grid_note,
+        "matches_record": not differs,
+        "differs": differs,
+    }
 TEST_LOOKS = ("pre-registered evaluation (this runtime)", "reproduction", "not scored (exploratory)")
 FRESH_DIR = "fresh-test"  # under outputs/; not removed by clear_outputs, so a re-run in the same runtime is a reproduction
 
