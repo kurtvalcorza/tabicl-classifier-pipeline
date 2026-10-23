@@ -1679,6 +1679,38 @@ STAGES = {
 REFUSAL_STAGES = {"data", "validate", "predict"}  # input refusals there are shown as one message, not a traceback (DAT20)
 
 
+def is_refusal(stage: str, options: dict, exc: BaseException) -> bool:
+    """A refused user input (DAT20), not a genuine failure: the kernel shows it as one line and never with a traceback.
+
+    Your own artifact ZIP (``external_artifact`` with ``source='own'``) and your own rows (``external_predict`` with a
+    ``rows_path``, or your own artifact without rows) are user inputs too; the pinned artifact and sample rows are not.
+    """
+    import zipfile
+
+    if not isinstance(exc, ValueError | FileNotFoundError | zipfile.BadZipFile):
+        return False
+    if stage in REFUSAL_STAGES:
+        return True
+    if stage == "external_artifact":
+        return options.get("source") == "own"
+    if stage == "external_predict":
+        return bool(options.get("rows_path")) or "your own artifact" in str(exc)
+    return False
+
+
+def refusal_name(run: Run, options: dict, message: str) -> str:
+    """The file a refusal names (DAT19): the input the message starts with, else every input the stage was given."""
+    paths = options.get("paths") or {}
+    given = [*paths.values(), options.get("new_data_path"), options.get("zip_path"), options.get("rows_path")]
+    names = [Path(str(value)).name for value in given if value]
+    for name in names:
+        if message.startswith(name + ":") or message.startswith(name + " "):
+            return name
+    if not names and (run.state / "data.json").is_file():
+        names = [str(json.loads((run.state / "data.json").read_text(encoding="utf-8")).get("name") or "")]
+    return ", ".join(name for name in names if name) or "(no file)"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", type=Path, required=True)
@@ -1698,9 +1730,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             STAGES[args.stage](run)
     except BaseException as exc:  # noqa: BLE001 -- every failure is reported to the kernel with its own message
-        traceback.print_exc()
-        refusal = args.stage in REFUSAL_STAGES and isinstance(exc, ValueError | FileNotFoundError)
-        atomic_write_json(error_file, {"type": type(exc).__name__, "message": str(exc), "refusal": refusal})
+        refusal = is_refusal(args.stage, run.options, exc)
+        record = {"type": type(exc).__name__, "message": str(exc), "refusal": refusal}
+        if refusal:  # DAT20: no traceback streams into the cell; the kernel prints the one Refused line
+            record["name"] = refusal_name(run, run.options, str(exc))
+        else:
+            traceback.print_exc()
+        atomic_write_json(error_file, record)
         return 1
     return 0
 
