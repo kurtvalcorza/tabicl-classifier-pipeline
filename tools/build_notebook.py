@@ -428,7 +428,10 @@ RUNNER_EXTRAS = (
     (
         "def run_stage(stage, **options):",
         "class Refused(RuntimeError):\n"
-        "    \"\"\"An input refusal: shown as one actionable message, without a traceback (NOTEBOOK_SPEC 2.5 DAT20).\"\"\"\n\n"
+        "    \"\"\"An input refusal: one line, `Refused: <file name>: <reason>`, without a traceback (NOTEBOOK_SPEC 3.0 DAT20).\"\"\"\n\n"
+        "    def __init__(self, name, reason):\n"
+        "        super().__init__(f'{name}: {reason}')\n"
+        "        self.name, self.reason = name, reason\n\n"
         "    def _render_traceback_(self):\n"
         "        return ['Refused: ' + str(self)]\n\n\n"
         "def run_stage(stage, **options):",
@@ -456,7 +459,11 @@ RUNNER_EXTRAS = (
         "            except (ValueError, KeyError):\n"
         "                error = {}\n"
         "        if error.get('refusal'):\n"
-        "            raise Refused(error['message'] + ' Nothing from the refused input was kept: fix it and re-run the Section 4 cell.')\n",
+        "            name, reason = error.get('name') or '(no file)', error['message']\n"
+        "            if reason.startswith(name + ': '):\n"
+        "                reason = reason[len(name) + 2:]\n"
+        "            again = 're-run the Section 4 cell' if stage in ('data', 'validate') else 'run this cell again'\n"
+        "            raise Refused(name, f'{reason} Nothing from the refused input was kept: fix it and {again}.') from None\n",
     ),
 )
 

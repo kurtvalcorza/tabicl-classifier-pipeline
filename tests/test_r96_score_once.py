@@ -290,14 +290,14 @@ def test_a_refusal_is_one_message_without_a_traceback(tmp_path) -> None:
     error = root / "state" / "data.error.json"
 
     def fail(*args, **kwargs):  # the stage writes its error file, then exits 1
-        error.write_text(json.dumps({"type": "ValueError", "message": "train.csv: the target column 'y' is not in the header.", "refusal": True}), encoding="utf-8")
+        error.write_text(json.dumps({"type": "ValueError", "message": "train.csv: the target column 'y' is not in the header.", "refusal": True, "name": "train.csv"}), encoding="utf-8")
         return types.SimpleNamespace(stdout=iter(()), returncode=1, wait=lambda: 1)
 
     ns["subprocess"].Popen = fail
     with pytest.raises(ns["Refused"]) as caught:
         ns["run_stage"]("data")
     rendered = caught.value._render_traceback_()
-    assert len(rendered) == 1 and rendered[0].startswith("Refused: train.csv") and "Traceback" not in rendered[0]
+    assert rendered == ["Refused: train.csv: the target column 'y' is not in the header. Nothing from the refused input was kept: fix it and re-run the Section 4 cell."]
     assert {"data", "validate", "predict"} == S.REFUSAL_STAGES
 
 
