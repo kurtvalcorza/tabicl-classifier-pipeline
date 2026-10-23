@@ -288,7 +288,31 @@ reads nothing.
   Section 11 Wine activity printed `'activity_sample': 'sklearn-wine'`, 36 holdout rows (`one_row_resolution` 0.0278), TabICL
   pretrained holdout accuracy 0.9722 / balanced accuracy 0.9762 / log loss 0.0518 / ROC AUC 1.0 against the majority-class
   baseline's accuracy 0.3889, and `{'canonical_outputs_unchanged': True}`.
-- **Fresh-test looks so far:** eight, the evaluation of record and reproductions 1–7 above. No CPU development look was taken: the
+- **Reproduction 8: first hosted run of the refusal-display blob, default path (hosted Colab T4, `d565b6d` / blob
+  `95a98e8c`; PR #35).** Colab CLI `colab exec -f` (a scripted run, not a browser Run all) on a fresh T4, started
+  2026-10-23T09:16:56Z, wall 410.1 s, exit 0, input unchanged; executed cell sources equal blob `95a98e8c` (48 cells); 15/15 code
+  cells, 0 errors, verdict PASS. Evidence: [`execution-evidence/2026-10-23-d565b6d/`](execution-evidence/2026-10-23-d565b6d/). The
+  fresh test was not masked (`DIMER_MASK_FRESH_TEST = unset`); it is labelled `reproduction`, selects `pretrained` and repeats
+  every reported result (difference 0.0, CI [0, 0], **same model (Δ = 0)**, accuracy 0.8993, Wilson [0.8831, 0.9136], ROC AUC
+  0.95). The record comparison printed `stage_runner_sha256` record `cc604098…` vs this run `79d87d18…`, `same_stage_runner:
+  False`, `grid_hash` `{'informational': …, 'record': '4b1bf536…', 'this_run': '4b1bf536…', 'equal': True}` and
+  **`matches_record: True`, `differs: []`**. The export reloaded with `labels_identical: True` (maximum probability difference
+  0.0), and Section 10 verified the pinned asset `2dc82d55…` before extraction.
+- **Reproduction 9: optional-activity run of the same blob (hosted Colab T4, `d565b6d` / committed blob `95a98e8c`,
+  `RUN_ACTIVITY = True`).** A run copy of committed blob `95a98e8c` with one override, `RUN_ACTIVITY = False` → `True` (run copy
+  blob `0eb3fbde88728d59fa4736977fd59d398a16acd0`, SHA-256 `7b5f0281dcb226b650fc3f241cb732b4a0c28c3ac6b1c9fa74f958357d220e42`; it
+  differs from the committed blob only in that assignment literal, in cell 45 of 48, and is committed beside the evidence as
+  `…_activity_run_copy.ipynb`), run by Colab CLI `colab exec -f` on a fresh T4, started 2026-10-23T09:24:03Z, wall 426.2 s, exit 0,
+  input (the run copy) unchanged, 15/15 code cells, 0 errors, verdict PASS. Evidence:
+  [`execution-evidence/2026-10-23-d565b6d-activity/`](execution-evidence/2026-10-23-d565b6d-activity/). The fresh test was not
+  masked; it is labelled `reproduction`, selects `pretrained` and repeats every reported result (difference 0.0, CI [0, 0],
+  **same model (Δ = 0)**, accuracy 0.8993), with `same_stage_runner: False` against the record, `grid_hash`
+  `{'informational': …, 'record': '4b1bf536…', 'this_run': '4b1bf536…', 'equal': True}` and **`matches_record: True`,
+  `differs: []`**. The export reloaded with `labels_identical: True`, and Section 10 verified the pinned asset `2dc82d55…`. The
+  Section 11 Wine activity printed `'activity_sample': 'sklearn-wine'`, 36 holdout rows (`one_row_resolution` 0.0278), TabICL
+  pretrained holdout accuracy 0.9722 / balanced accuracy 0.9762 / log loss 0.0518 / ROC AUC 1.0 against the majority-class
+  baseline's accuracy 0.3889, and `{'canonical_outputs_unchanged': True}`.
+- **Fresh-test looks so far:** ten, the evaluation of record and reproductions 1–9 above. No CPU development look was taken: the
   fixer's CPU checks ran with the fresh test masked; the masked hosted runs (96m1–96m4) did not read it.
 
 ### Issue #28: the fp16 grid hash varies on the T4; it is reported, never compared (2026-10-23)
@@ -315,12 +339,16 @@ revision; reproduction 5 contradicts that, so that conclusion is withdrawn. The 
 | Reproduction 5 (activity) | 2026-10-22 (from 13:24) | `edbe94d` / `f21920ab` | `d4172f5`, `ee759496…` | `4b1bf536…` |
 | Reproduction 6 | 2026-10-22 (from 22:07) | `1344dca` / `515f8954` | `210c75c`, `a0130b1e…` | `4b1bf536…` |
 | Reproduction 7 (activity) | 2026-10-22 (from 22:15) | `1344dca` / `515f8954` | `210c75c`, `a0130b1e…` | `2aa9e0cd…` |
+| Reproduction 8 | 2026-10-23 (from 09:16) | `d565b6d` / `95a98e8c` | `ade4356`, `79d87d18…` | `4b1bf536…` |
+| Reproduction 9 (activity) | 2026-10-23 (from 09:24) | `d565b6d` / `95a98e8c` | `ade4356`, `79d87d18…` | `4b1bf536…` |
 
 Reproductions 4 and 5 carry the same blob and the same runner and print different grid hashes; that pair is the evidence for the
 revised finding. Reproductions 6 and 7 repeat the observation on blob `515f8954`: the same blob and runner printed `4b1bf536…` and
 `2aa9e0cd…`, and both runs passed with `matches_record: True`, `differs: []`, because the check now reports the grid hash as
 informational and never compares it. That is the fix working: under PR #30's rule a record refreshed on runner `a0130b1e…` would
-have failed one of the two on the hash alone. The paragraphs from *Confound breaker* to *Effect size* are the PR #30 analysis, kept as history; its revision
+have failed one of the two on the hash alone. Reproductions 8 and 9 (blob `95a98e8c`, runner `79d87d18…`) both printed
+`4b1bf536…` and passed with `matches_record: True`, `differs: []`; two equal hashes at one revision are consistent with the
+finding, not evidence against it. The paragraphs from *Confound breaker* to *Effect size* are the PR #30 analysis, kept as history; its revision
 explanation does not account for reproductions 4 and 5.
 
 The 96m3/96m4 suite logs carry blob `652c0015`; its `notebook_source` is `15c1ae4`, and `b66a30f` differs from `15c1ae4` only by the
@@ -355,6 +383,26 @@ would have failed reproduction 4 or 5 on the grid hash alone; under this rule bo
 **Pre-registration.** No amendment in this change. The amendment-2 check (two masked runs at one revision with identical grid
 hashes) was met by 96m3 and 96m4 at `b66a30f` before any run scored the fresh test. Reproductions 4 and 5 show that such agreement
 is not guaranteed on the T4, so the grid hash is not evidence of reproducibility on its own.
+
+**Local-path redaction of the reproduction 9 (optional-activity) evidence.** Local paths were replaced by `<local-run-dir>/` before
+the first commit. The executed notebook and the run copy were checked against `run_summary.json`'s `executed_sha256` and
+`run_copy_sha256` before any edit.
+
+| File (under `execution-evidence/2026-10-23-d565b6d-activity/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_d565b6d_colab-cli-t4_activity.ipynb` | `83e92b070e1ed4146190d699d6f7e911e0e860354e875342974a96ddc3f0b10f` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_d565b6d_colab-cli-t4_activity_exec.log` | `4f3d1ba0e3ef71fe6f504e11a87b37d3f2a4383eea3a39572d39e1a30440be27` | `2a4fd06d20a69ab552ff455025f1d735877662107a7b35860cb3a31e3921fa5e` (2 replacements) |
+| `tabiclv2_classifier_colab_d565b6d_colab-cli-t4_activity_run_summary.json` | `59e3b3a324297a9a3e167951d03f71b58cbcaf0400f6320cb6ad5d90d779816b` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_d565b6d_colab-cli-t4_activity_run_copy.ipynb` | `7b5f0281dcb226b650fc3f241cb732b4a0c28c3ac6b1c9fa74f958357d220e42` | unchanged (no local path) |
+
+**Local-path redaction of the reproduction 8 evidence.** Local paths were replaced by `<local-run-dir>/` before the first commit.
+The executed notebook was checked against `run_summary.json`'s `executed_sha256` before any edit.
+
+| File (under `execution-evidence/2026-10-23-d565b6d/`) | Captured | Committed |
+|---|---|---|
+| `tabiclv2_classifier_colab_d565b6d_colab-cli-t4.ipynb` | `3ad51b0bb72cf602ace4f268e524505b97049fef045c29f03752ab3cc042a52b` | unchanged (no local path) |
+| `tabiclv2_classifier_colab_d565b6d_colab-cli-t4_exec.log` | `5961f2a007a2b6ff915ba3ab9f972bbe4c7461ef794f43a20bf9f92ce8e95afb` | `7306a05a779c930630dd23b5b11360add21a38b82efe125e1117b7d514f61436` (2 replacements) |
+| `tabiclv2_classifier_colab_d565b6d_colab-cli-t4_run_summary.json` | `ba6bf305e9075c658488dd414e793dee434b38472cfd5dc03172f8f5e556df9f` | unchanged (no local path) |
 
 **Local-path redaction of the reproduction 7 (optional-activity) evidence.** Local paths were replaced by `<local-run-dir>/` before
 the first commit. The executed notebook was checked against `run_summary.json`'s `executed_sha256` before any edit.
@@ -465,7 +513,7 @@ unredacted path remains in the repository's earlier history, which is not rewrit
 
 ## Current status
 
-The 2026-10-23 refusal-display fix (branch `fix/refusal-display`, NOTEBOOK_SPEC 3.0 DAT19/DAT20: a refused user input is shown as one `Refused: <file name>: <rule>` line with no traceback, and the run stops at that cell) changed the notebook blob from `515f8954` to `95a98e8c`, so under REL14 reproductions 6 and 7 (`1344dca`) are history for blob `515f8954`, not evidence for `95a98e8c`; new hosted runs of `95a98e8c` (the default path, the optional activity, the REL12 BYOD review and the REL2 browser run) are pending and will be recorded in `docs/release-verification.md`. **Current status (2026-10-23): Candidate.** The current E2E notebook blob is `515f8954` (`tutorials/tabiclv2_classifier_colab.ipynb` at `1344dca`, PR #33). Its default path is covered by reproduction 6 under *Fresh-test evaluation*, evidence in `execution-evidence/2026-10-23-1344dca/`. It ran by Colab CLI `colab exec -f` (scripted, not a browser Run all) on a fresh Colab Tesla T4: exit 0, 15/15 code cells, 0 error outputs, 425.8 s, input unchanged, verdict PASS. In that run the pre-registered fine-tuning grid ran and kept the pretrained model, so the fine-tuned-checkpoint export path was again not exercised; the fresh test reproduced the record (Δ = 0.0, `matches_record: True`, `differs: []`, the grid hash reported as informational); the export reloaded with identical labels; and Section 10 verified the pinned `sample-artifact-magic-v1` asset (`2dc82d55…`) before extraction. The optional-activity gate (the owner's 2026-10-22 ruling that the Section 11 Wine activity runs once on the current blob before promotion) is covered by reproduction 7, the `1344dca` optional-activity run (`RUN_ACTIVITY = True` run copy of this blob, Colab CLI, fresh T4, 440.0 s, 15/15 code cells, PASS, evidence in `execution-evidence/2026-10-23-1344dca-activity/`). The runs of the previous blob `f21920ab` (reproductions 4 and 5, `d4172f5` and `edbe94d`) are history and are not evidence for this blob (REL14). The notebook stays **Candidate** pending only these two for this blob:
+**Current status (2026-10-23): Candidate.** The current E2E notebook blob is `95a98e8c` (`tutorials/tabiclv2_classifier_colab.ipynb` at `d565b6d`, PR #35, branch `fix/refusal-display`), produced by the refusal-display fix (NOTEBOOK_SPEC 3.0 DAT19/DAT20: a refused user input is shown as one `Refused: <file name>: <rule>` line with no traceback, and the run stops at that cell). Its default path is covered by reproduction 8 under *Fresh-test evaluation*, evidence in `execution-evidence/2026-10-23-d565b6d/`. It ran by Colab CLI `colab exec -f` (scripted, not a browser Run all) on a fresh Colab Tesla T4: exit 0, 15/15 code cells, 0 error outputs, 410.1 s, input unchanged, verdict PASS. In that run the pre-registered fine-tuning grid ran and kept the pretrained model, so the fine-tuned-checkpoint export path was again not exercised; the fresh test reproduced the record (Δ = 0.0, `matches_record: True`, `differs: []`, the grid hash reported as informational); the export reloaded with identical labels; and Section 10 verified the pinned `sample-artifact-magic-v1` asset (`2dc82d55…`) before extraction. The optional-activity gate (the owner's 2026-10-22 ruling that the Section 11 Wine activity runs once on the current blob before promotion) is covered by reproduction 9, the `d565b6d` optional-activity run (`RUN_ACTIVITY = True` run copy of this blob, Colab CLI, fresh T4, 426.2 s, 15/15 code cells, PASS, evidence in `execution-evidence/2026-10-23-d565b6d-activity/`). The runs of the previous blob `515f8954` (reproductions 6 and 7, `1344dca`) and of earlier blobs are history and are not evidence for this blob (REL14). The notebook stays **Candidate** pending only these two for this blob:
 
 - **REL12:** a BYOD run in which one representative input is accepted through the downstream stages and one incompatible input is refused;
 - **REL2:** a browser run of the interactive journeys (BYOD upload dialog, optional-activity toggle, own-artifact ZIP); the scripted CLI runs count for the default path and the activity only.
