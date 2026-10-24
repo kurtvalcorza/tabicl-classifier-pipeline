@@ -1,3 +1,4 @@
+# ruff: noqa: E501  -- single-line test fixtures and assertions are kept readable
 """The base model is served from a pinned safetensors conversion, never from the pickle checkpoint.
 
 The offline tests need no model library. The model-backed tests build a tiny randomly initialised TabICL network,
