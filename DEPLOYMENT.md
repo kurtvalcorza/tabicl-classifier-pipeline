@@ -26,11 +26,11 @@ Start with a single modern CUDA GPU and conservative row/feature limits, then pr
 
 A successful training run produces:
 
-- `checkpoints/best.ckpt`: downstream fine-tuned TabICLv2 checkpoint;
+- `checkpoints/best.safetensors`: the fine-tuned TabICLv2 weights (`state_dict` tensors, `config` as JSON metadata), converted from tabicl's `best.ckpt` right after training; bundle format `tabicl-dimer-classifier-v2` (see `DIMER_CONTRACT.md`, *Bundle format v1 → v2*);
 - `training_context.parquet`: the in-context support table used at inference time;
 - `artifact.json`: paths, target/feature schema, package/checkpoint metadata.
 
-The inference service must load `best.ckpt`, reconstruct `X_context`/`y_context` from `training_context.parquet`, call `TabICLClassifier.fit`, then serve `predict`/`predict_proba`.
+The inference service must load `best.safetensors` through the safetensors shim (`SafetensorsTabICLClassifier`; no `torch.load`), reconstruct `X_context`/`y_context` from `training_context.parquet`, call `TabICLClassifier.fit`, then serve `predict`/`predict_proba`. A deprecated v1 bundle's `best.ckpt` is loaded only with `torch.load(weights_only=True)`.
 
 Because the artifact intentionally contains the training context, treat the artifact with the same data-governance controls as the source training dataset.
 
@@ -55,7 +55,7 @@ So a DIMER-selected Base Model deterministically controls the checkpoint actuall
 1. Build both repository images through DIMER.
 2. Confirm validator pass/fail behavior on valid and adversarial sample archives (duplicate splits, nested/zip-bomb archives, path traversal, `target_column` in `drop_columns`, malformed runtime config).
 3. Run a GPU fine-tune smoke test.
-4. Confirm `best.ckpt` exists and the built-in reload smoke test — which reconstructs the model **from `artifact.json` plus its referenced files** (`checkpoints/best.ckpt`, `training_context.parquet`) — succeeds.
+4. Confirm `best.safetensors` exists (and no `.ckpt` is packaged) and the built-in reload smoke test — which reconstructs the model **from `artifact.json` plus its referenced files** (`checkpoints/best.safetensors`, `training_context.parquet`), through the shim with `torch.load` refused — succeeds.
 5. Confirm `result.json` records validation metrics, fine-tuned checkpoint SHA-256, training-context SHA-256, exact base-model provenance (revision + SHA-256 + source), and the input **dataset digest** (`provenance.dataset`).
 6. Supply `test.csv` and confirm test metrics are reported but do not influence checkpoint selection.
 7. **End-to-end serving acceptance (on-platform):** BYOD upload → validator → GPU fine-tune → artifact persistence/download → fresh-environment reload, then DIMER deployment → API inference. On a shared sample, compare both `predict` **and `predict_proba`** (including class ordering) across the training instance, the offline reload, and the API — they must all agree, so the served artifact reproduces the exact model whose metrics `result.json` reports.

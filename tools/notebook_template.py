@@ -45,7 +45,7 @@ ENVIRONMENT = {
     "package": "tabicl_classifier_pipeline",
     "repo_name": REPO,
     "weights_key": "tabicl-classifier-v2",
-    "modules": ["__init__.py", "api.py"],
+    "modules": ["__init__.py", "api.py", "safetensors_shim.py"],
     "entry_module": "api.py",
     "lock": "tutorials/requirements-colab.lock.txt",
     "managed_python": "3.12.12",

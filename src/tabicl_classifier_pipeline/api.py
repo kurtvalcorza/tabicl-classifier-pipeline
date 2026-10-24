@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import importlib.metadata
 import io
 import json
@@ -11,7 +10,6 @@ import os
 import shutil
 import stat
 import sys
-import warnings
 import zipfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -20,14 +18,30 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-# Serving-bundle formats. v2 (current) carries the weights as ``checkpoints/best.safetensors``; v1 carried tabicl's pickle
-# ``checkpoints/best.ckpt``. A v1 bundle stays readable until it is re-issued: its checkpoint is read only with
-# ``torch.load(weights_only=True)`` and a ``DeprecationWarning`` (``load_legacy_checkpoint_network``).
-ARTIFACT_FORMAT = "tabicl-dimer-classifier-v2"
-LEGACY_ARTIFACT_FORMAT = "tabicl-dimer-classifier-v1"
-SUPPORTED_ARTIFACT_FORMATS = (ARTIFACT_FORMAT, LEGACY_ARTIFACT_FORMAT)
-BUNDLE_CHECKPOINT = "checkpoints/best.safetensors"
-LEGACY_BUNDLE_CHECKPOINT = "checkpoints/best.ckpt"
+from . import safetensors_shim as _shim
+from .safetensors_shim import (  # noqa: F401 -- re-exported: the package API and the carried notebook use these names
+    ARTIFACT_FORMAT,
+    BUNDLE_CHECKPOINT,
+    CONFIG_METADATA_KEY,
+    CONVERSION_FORMAT,
+    LEGACY_ARTIFACT_FORMAT,
+    LEGACY_BUNDLE_CHECKPOINT,
+    SUPPORTED_ARTIFACT_FORMATS,
+    canonical_safetensors,
+    check_bundle_layout,
+    convert_finetuned_checkpoint,
+    legacy_checkpoint_classifier_class,
+    load_converted_network,
+    load_legacy_checkpoint_network,
+    safetensors_classifier_class,
+    safetensors_finetuned_classifier_class,
+    serving_classifier_class,
+    sha256_file,
+)
+
+# The conversion, the safetensors shim and the serving-bundle formats live in ``safetensors_shim`` (vendored byte for byte
+# by the fine-tune worker; see its docstring). v2 bundles (``ARTIFACT_FORMAT``) carry ``checkpoints/best.safetensors``;
+# v1 bundles (``checkpoints/best.ckpt``) stay readable with ``torch.load(weights_only=True)`` and a ``DeprecationWarning``.
 
 # Fleet snapshot identity (DIMER Notebook Specification 1.1, ST3/MOD13). The pinned upstream checkpoint is
 # unchanged; these are the fleet-standard names for the same repository, revision, license and snapshot key.
@@ -50,8 +64,6 @@ BASE_MODEL_SHA256 = "bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3
 # is then built from that config and loaded with ``load_state_dict(strict=True)``; nothing deserialises the pickle again.
 CONVERTED_CHECKPOINT_NAME = "tabicl-classifier-v2-20260212.safetensors"
 CONVERTED_MODEL_SHA256 = "09bc6836d32b92f3f6126b9b15994b353dcf31e039b8c2a64e2c5c9f05b9e917"
-CONVERSION_FORMAT = "tabicl-state-dict-safetensors-v1"
-CONFIG_METADATA_KEY = "tabicl_config"
 
 # Operational ceilings the tutorials enforce before any model execution (DAT22).
 MIN_TRAIN_ROWS = 50  # labelled support rows required to condition the classifier
@@ -93,8 +105,7 @@ def create_classifier(
     ``SafetensorsTabICLClassifier``, which builds the network from the file's config and never calls ``torch.load``.
     Any other path is a deprecated pickle checkpoint (a v1 bundle's ``best.ckpt``): ``LegacyCheckpointTabICLClassifier``
     reads it only with ``torch.load(weights_only=True)`` and emits a ``DeprecationWarning``."""
-    is_safetensors = Path(model_path).suffix == ".safetensors"
-    estimator_class = safetensors_classifier_class() if is_safetensors else legacy_checkpoint_classifier_class()
+    estimator_class = serving_classifier_class(model_path)
     return estimator_class(
         model_path=str(model_path),
         allow_auto_download=allow_auto_download,
@@ -120,21 +131,9 @@ def create_finetuned_classifier(**kwargs: Any):
 
 
 # ---------------------------------------------------------------------------
-# Safetensors conversion and the shim that serves it (the pinned tabicl==2.1.1 loads ``.ckpt`` files itself in
-# ``TabICLClassifier._load_model``; the shim overrides only that method).
+# Safetensors conversion of the pinned base (the generic conversion and the shim are in ``safetensors_shim``; the pinned
+# tabicl==2.1.1 loads ``.ckpt`` files itself in ``TabICLClassifier._load_model``, and the shim overrides only that method).
 # ---------------------------------------------------------------------------
-
-
-def canonical_safetensors(data: bytes) -> bytes:
-    """Re-emit a safetensors header as sorted, compact JSON padded with spaces to 8 bytes; the data is unchanged.
-
-    ``safetensors.torch.save`` (0.8.0) writes ``__metadata__`` in hash-map order, so equal inputs can give different
-    bytes. Tensor offsets are relative to the end of the header, so re-ordering the header keeps them valid."""
-    size = int.from_bytes(data[:8], "little")
-    header = json.loads(data[8 : 8 + size])
-    text = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    text += b" " * (-len(text) % 8)
-    return len(text).to_bytes(8, "little") + text + data[8 + size :]
 
 
 def convert_checkpoint(
@@ -144,92 +143,11 @@ def convert_checkpoint(
     expected_sha256: str | None = None,
     source_name: str = BASE_CHECKPOINT_NAME,
 ) -> dict[str, Any]:
-    """Convert a tabicl ``.ckpt`` to safetensors once; return the source and converted digests.
-
-    The source must match ``expected_sha256`` (default ``BASE_MODEL_SHA256``) before it is read, and is read with
-    ``torch.load(map_location="cpu", weights_only=True)``. The ``state_dict`` tensors are made contiguous CPU clones
-    and the ``config`` is stored as sorted JSON under ``CONFIG_METADATA_KEY``."""
-    source, destination = Path(source), Path(destination)
+    """Convert a tabicl ``.ckpt`` to safetensors once (``safetensors_shim.convert_checkpoint``), by default the pinned base:
+    the source must match ``expected_sha256`` (default ``BASE_MODEL_SHA256``) before it is read with
+    ``torch.load(weights_only=True)``. Returns the source and converted digests."""
     expected = BASE_MODEL_SHA256 if expected_sha256 is None else expected_sha256
-    source_sha = sha256_file(source)
-    if source_sha != expected:
-        raise ValueError(f"{source.name}: sha256 {source_sha} != pinned {expected}; refusing to deserialise it")
-    import torch
-    from safetensors.torch import save
-
-    checkpoint = torch.load(source, map_location="cpu", weights_only=True)
-    if not isinstance(checkpoint, Mapping) or "config" not in checkpoint or "state_dict" not in checkpoint:
-        raise ValueError(f"{source.name}: not a tabicl checkpoint (needs 'config' and 'state_dict')")
-    config = dict(checkpoint["config"])
-    tensors = {key: value.detach().to("cpu").contiguous().clone() for key, value in checkpoint["state_dict"].items()}
-    metadata = {
-        "format": CONVERSION_FORMAT,
-        CONFIG_METADATA_KEY: json.dumps(config, sort_keys=True, separators=(",", ":")),
-        "source_file": source_name,
-        "source_sha256": source_sha,
-    }
-    data = canonical_safetensors(save(tensors, metadata=metadata))
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    tmp = destination.with_name(destination.name + ".tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, destination)
-    return {"source_sha256": source_sha, "converted_sha256": hashlib.sha256(data).hexdigest(), "tensors": len(tensors), "bytes": len(data)}
-
-
-def load_converted_network(path: str | Path) -> tuple[Any, dict[str, Any]]:
-    """Build the TabICL network from a converted file's config and load its tensors with ``strict=True``."""
-    from safetensors import safe_open
-    from safetensors.torch import load_file
-    from tabicl._model.tabicl import TabICL
-
-    with safe_open(str(path), framework="pt", device="cpu") as handle:
-        metadata = handle.metadata() or {}
-    if metadata.get("format") != CONVERSION_FORMAT or CONFIG_METADATA_KEY not in metadata:
-        raise ValueError(f"{path}: not a {CONVERSION_FORMAT} file")
-    config = json.loads(metadata[CONFIG_METADATA_KEY])
-    network = TabICL(**config)
-    network.load_state_dict(load_file(str(path), device="cpu"), strict=True)
-    network.eval()
-    return network, config
-
-
-def convert_finetuned_checkpoint(source: str | Path, destination: str | Path | None = None, *, remove_source: bool = True) -> dict[str, Any]:
-    """Convert a ``.ckpt`` that tabicl's fine-tuning loop just wrote (``best.ckpt``/``epoch{N}.ckpt``) to safetensors.
-
-    tabicl 2.1.1 writes its fine-tuning checkpoints itself with ``torch.save`` (``config``, ``state_dict`` and the
-    optimizer/scheduler state). The file is this process's own output, so its observed SHA-256 is the expected one; it is
-    read once with ``torch.load(weights_only=True)``, only ``config`` and ``state_dict`` are kept, and the pickle is
-    removed unless ``remove_source=False``. Returns ``convert_checkpoint``'s facts plus the destination path."""
-    source = Path(source)
-    target = Path(destination) if destination is not None else source.with_suffix(".safetensors")
-    facts = convert_checkpoint(source, target, expected_sha256=sha256_file(source), source_name=source.name)
-    if remove_source:
-        source.unlink()
-    return {**facts, "path": str(target)}
-
-
-def load_legacy_checkpoint_network(path: str | Path) -> tuple[Any, dict[str, Any]]:
-    """DEPRECATED: build the network from a v1 pickle checkpoint (``checkpoints/best.ckpt``) for old bundles only.
-
-    Read with ``torch.load(map_location="cpu", weights_only=True)``, never ``weights_only=False``; the network is built
-    from its ``config`` and loaded with ``strict=True``. Kept until the v1 release artifacts are re-issued as v2."""
-    import torch
-    from tabicl._model.tabicl import TabICL
-
-    warnings.warn(
-        f"{Path(path).name}: loading a pickle checkpoint from a {LEGACY_ARTIFACT_FORMAT} bundle (weights_only=True). "
-        f"This layout is deprecated; re-issue the bundle as {ARTIFACT_FORMAT} with {BUNDLE_CHECKPOINT}.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    checkpoint = torch.load(path, map_location="cpu", weights_only=True)
-    if not isinstance(checkpoint, Mapping) or "config" not in checkpoint or "state_dict" not in checkpoint:
-        raise ValueError(f"{path}: not a tabicl checkpoint (needs 'config' and 'state_dict')")
-    config = dict(checkpoint["config"])
-    network = TabICL(**config)
-    network.load_state_dict(checkpoint["state_dict"], strict=True)
-    network.eval()
-    return network, config
+    return _shim.convert_checkpoint(source, destination, expected_sha256=expected, source_name=source_name)
 
 
 def ensure_converted(path: str | Path | None = None, *, allow_download: bool = False) -> Path:
@@ -249,51 +167,6 @@ def ensure_converted(path: str | Path | None = None, *, allow_download: bool = F
         target.unlink(missing_ok=True)
         raise ValueError(f"{CONVERTED_CHECKPOINT_NAME}: converted sha256 {facts['converted_sha256']} != pinned {CONVERTED_MODEL_SHA256}")
     return target
-
-
-_SHIM_CLASSES: dict[str, type] = {}
-
-
-def safetensors_classifier_class() -> type:
-    """``TabICLClassifier`` with ``_load_model`` reading the converted safetensors file named by ``model_path``."""
-    if "classifier" not in _SHIM_CLASSES:
-        from tabicl import TabICLClassifier
-
-        class SafetensorsTabICLClassifier(TabICLClassifier):
-            def _load_model(self) -> None:
-                self.model_path_ = Path(self.model_path)
-                self.model_, self.model_config_ = load_converted_network(self.model_path_)
-
-        _SHIM_CLASSES["classifier"] = SafetensorsTabICLClassifier
-    return _SHIM_CLASSES["classifier"]
-
-
-def legacy_checkpoint_classifier_class() -> type:
-    """DEPRECATED: ``TabICLClassifier`` whose ``_load_model`` reads a v1 pickle checkpoint via ``load_legacy_checkpoint_network``."""
-    if "legacy" not in _SHIM_CLASSES:
-        from tabicl import TabICLClassifier
-
-        class LegacyCheckpointTabICLClassifier(TabICLClassifier):
-            def _load_model(self) -> None:
-                self.model_path_ = Path(self.model_path)
-                self.model_, self.model_config_ = load_legacy_checkpoint_network(self.model_path_)
-
-        _SHIM_CLASSES["legacy"] = LegacyCheckpointTabICLClassifier
-    return _SHIM_CLASSES["legacy"]
-
-
-def safetensors_finetuned_classifier_class() -> type:
-    """``FinetunedTabICLClassifier`` whose inner estimator is the safetensors shim (the pretrained load goes through it)."""
-    if "finetuned" not in _SHIM_CLASSES:
-        from tabicl import FinetunedTabICLClassifier
-
-        class SafetensorsFinetunedTabICLClassifier(FinetunedTabICLClassifier):
-            def _create_inner_estimator(self, *args: Any, **kwargs: Any):
-                inner = super()._create_inner_estimator(*args, **kwargs)
-                return safetensors_classifier_class()(**inner.get_params())
-
-        _SHIM_CLASSES["finetuned"] = SafetensorsFinetunedTabICLClassifier
-    return _SHIM_CLASSES["finetuned"]
 
 
 def fine_tune_classifier(model: Any, X: Any, y: Any, **kwargs: Any) -> Any:
@@ -445,14 +318,6 @@ def validate_artifact_runtime(
 # ---------------------------------------------------------------------------
 # Fleet snapshot scheme (NOTEBOOK_SPEC 1.1 ST3/ST4, MOD13): manifest-driven verification and staging.
 # ---------------------------------------------------------------------------
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def verify_snapshot(path: str | Path | None = None) -> dict[str, Any]:
@@ -1064,25 +929,6 @@ def manifest_member_path(root: str | Path, value: Any, field: str) -> Path:
     if root_resolved != target and root_resolved not in target.parents:
         raise ValueError(f"{field} path escapes artifact root: {value!r}")
     return target
-
-
-def check_bundle_layout(manifest: Mapping[str, Any]) -> str:
-    """The checkpoint member a bundle format allows: v2 names ``BUNDLE_CHECKPOINT`` in ``checkpoint``,
-    ``inference.modelPath`` and ``payloadFiles``; a v1 bundle names a ``.ckpt`` (deprecated, ``weights_only=True`` only).
-    Returns the format; anything else is refused before a checkpoint is opened."""
-    fmt = manifest.get("artifactFormat")
-    checkpoint = str(manifest.get("checkpoint"))
-    model_path = (manifest.get("inference") or {}).get("modelPath")
-    payload = manifest.get("payloadFiles")
-    if fmt == ARTIFACT_FORMAT:
-        if checkpoint != BUNDLE_CHECKPOINT or model_path not in (None, BUNDLE_CHECKPOINT) or (payload is not None and BUNDLE_CHECKPOINT not in payload):
-            raise ValueError(f"{ARTIFACT_FORMAT} bundles carry {BUNDLE_CHECKPOINT} (checkpoint, inference.modelPath, payloadFiles); got checkpoint={checkpoint!r}, modelPath={model_path!r}")
-    elif fmt == LEGACY_ARTIFACT_FORMAT:
-        if Path(checkpoint).suffix != ".ckpt":
-            raise ValueError(f"{LEGACY_ARTIFACT_FORMAT} bundles carry a .ckpt checkpoint; got {checkpoint!r}")
-    else:
-        raise ValueError(f"Unsupported artifactFormat: {fmt} (supported: {list(SUPPORTED_ARTIFACT_FORMATS)})")
-    return fmt
 
 
 def verify_artifact_bundle(root: str | Path, manifest: Mapping[str, Any]) -> dict[str, Path]:

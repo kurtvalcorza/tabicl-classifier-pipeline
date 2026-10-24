@@ -66,6 +66,7 @@ from .api import (
     safe_extract_zip,
     safetensors_classifier_class,
     safetensors_finetuned_classifier_class,
+    serving_classifier_class,
     sha256_file,
     stage_missing_files,
     validate_artifact_runtime,
@@ -75,6 +76,7 @@ from .api import (
 )
 
 __all__ = [
+    "serving_classifier_class",
     "BUNDLE_CHECKPOINT",
     "LEGACY_ARTIFACT_FORMAT",
     "LEGACY_BUNDLE_CHECKPOINT",

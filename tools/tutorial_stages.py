@@ -85,6 +85,12 @@ SAMPLE_ARTIFACT_PRODUCER = {
     "run": "recorded hosted Colab T4 run; the release notes of the tag name the run record (SART8)",
     "release_tag": SAMPLE_ARTIFACT_TAG,
 }
+# The re-issued sample artifact (v2 bundle layout: checkpoints/best.safetensors, the converted base). Built from the v1 ZIP
+# with byte-identical training context and a recorded `reissue` block; staged for release, NOT yet published. Until
+# the tag is published, the default above stays on v1 (a deprecated v1 bundle, read with weights_only=True); switching is
+# replacing the three SAMPLE_ARTIFACT_* values above with these and the producer record.
+SAMPLE_ARTIFACT_V2_TAG = "sample-artifact-magic-v2"
+SAMPLE_ARTIFACT_V2_SHA256 = "9694e374c5177e84244575b25fa14a858dd853eff59285b9c44f4a5e2c253579"
 SAMPLE_ARTIFACT_MAX_BYTES = 512 * 1024 * 1024  # a download larger than this is refused before it is hashed or opened
 EXTERNAL_DIR = "external_artifact"  # under outputs/: the section's predictions and provenance (XAS6)
 EXTERNAL_SAMPLE_ROWS = 8

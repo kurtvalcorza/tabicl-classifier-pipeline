@@ -89,6 +89,27 @@ def test_a_pretrained_bundle_must_carry_the_pinned_base_in_its_own_layout() -> N
             S.check_bundle_identity(P, swapped)
 
 
+def test_the_staged_v2_sample_pin_is_not_the_default_until_it_is_published() -> None:
+    S = _stages()
+    assert S.SAMPLE_ARTIFACT_TAG == "sample-artifact-magic-v1" and "sample-artifact-magic-v1" in S.SAMPLE_ARTIFACT_URL
+    assert S.SAMPLE_ARTIFACT_V2_TAG == "sample-artifact-magic-v2"
+    assert len(S.SAMPLE_ARTIFACT_V2_SHA256) == 64 and S.SAMPLE_ARTIFACT_V2_SHA256 != S.SAMPLE_ARTIFACT_SHA256
+
+
+def test_the_shim_module_is_self_contained_so_the_worker_can_vendor_it_byte_for_byte() -> None:
+    import ast
+
+    path = ROOT / "src" / "tabicl_classifier_pipeline" / "safetensors_shim.py"
+    data = path.read_bytes()
+    assert b"\r\n" not in data
+    tree = ast.parse(data)
+    top = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    assert all(not (isinstance(n, ast.ImportFrom) and n.level) for n in ast.walk(tree)), "no relative imports"
+    roots = {a.name.split(".")[0] for n in top if isinstance(n, ast.Import) for a in n.names} | {n.module.split(".")[0] for n in top if isinstance(n, ast.ImportFrom) and n.module}
+    assert roots <= {"__future__", "hashlib", "json", "os", "warnings", "collections", "pathlib", "typing"}, roots
+    assert "CANONICAL SOURCE: kurtvalcorza/tabicl-classifier-pipeline, src/tabicl_classifier_pipeline/safetensors_shim.py" in data.decode()
+
+
 # ---------------------------------------------------------------- model-backed: conversion, equivalence, both layouts
 
 
