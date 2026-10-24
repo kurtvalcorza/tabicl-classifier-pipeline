@@ -27,8 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
 E2E = ROOT / "tutorials" / "tabiclv2_classifier_colab.ipynb"
 MAGIC_ZIP = ROOT / "examples" / "sample-data" / "magic-gamma.zip"
-PINNED_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip"
-PINNED_SHA256 = "2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c"
+PINNED_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v2/tabiclv2_classifier_artifact.zip"
+PINNED_SHA256 = "9694e374c5177e84244575b25fa14a858dd853eff59285b9c44f4a5e2c253579"
 SECTION_START = "## 10. Using an artifact made elsewhere"
 SECTION_END = "## 11. Optional activity"
 
@@ -87,7 +87,8 @@ def test_section_pins_the_release_asset_by_url_and_digest() -> None:
     assert STAGES.SAMPLE_ARTIFACT_URL == PINNED_URL
     assert STAGES.SAMPLE_ARTIFACT_SHA256 == PINNED_SHA256
     assert STAGES.SAMPLE_ARTIFACT_PRODUCER["commit"].startswith("383ca04")
-    assert STAGES.SAMPLE_ARTIFACT_PRODUCER["release_tag"] == "sample-artifact-magic-v1"
+    assert STAGES.SAMPLE_ARTIFACT_PRODUCER["release_tag"] == "sample-artifact-magic-v2"
+    assert "sample-artifact-magic-v1" in STAGES.SAMPLE_ARTIFACT_PRODUCER["reissue"]
 
 
 def test_default_path_fetches_the_pin_and_never_this_runs_export(tmp_path, monkeypatch) -> None:
@@ -269,8 +270,8 @@ _REPO = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline"
         f"{_REPO}/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip?raw=1",
         f"{_REPO}/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip#x",
         "https://github.com/kurtvalcorza/swin-detection-pipeline/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip",
-        f"{_REPO}/releases/download/sample-artifact-magic-v2/tabiclv2_classifier_artifact.zip",
-        f"{_REPO}/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip.sig",
+        f"{_REPO}/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip",
+        f"{_REPO}/releases/download/sample-artifact-magic-v2/tabiclv2_classifier_artifact.zip.sig",
         f"{_REPO}.git",
         "https://GitHub.com/KurtValcorza/tabicl-classifier-pipeline/archive/refs/heads/main.zip",
     ],

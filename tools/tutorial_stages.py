@@ -76,21 +76,23 @@ MAGIC_FRESH_TEST_ROWS = 1500
 # (`outputs/tabiclv2_classifier_artifact.zip`) of a recorded earlier hosted run of this notebook's default path (SART8,
 # SART9). It is pinned by URL and SHA-256 and never replaced; a changed artifact gets a new tag and a new pin (SART7,
 # SART11). The export of the current run is never used as the external artifact (XAS2).
-SAMPLE_ARTIFACT_TAG = "sample-artifact-magic-v1"
-SAMPLE_ARTIFACT_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip"  # literal: validators allow only this exact URL
-SAMPLE_ARTIFACT_SHA256 = "2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c"
+# The default is the bundle-format-v2 re-issue (checkpoints/best.safetensors, the converted base) of the recorded run's
+# v1 export: byte-identical training context and every manifest field unchanged except the checkpoint, plus a recorded
+# `reissue` block. It is not the export of a new hosted run.
+SAMPLE_ARTIFACT_TAG = "sample-artifact-magic-v2"
+SAMPLE_ARTIFACT_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v2/tabiclv2_classifier_artifact.zip"  # literal: validators allow only this exact URL
+SAMPLE_ARTIFACT_SHA256 = "9694e374c5177e84244575b25fa14a858dd853eff59285b9c44f4a5e2c253579"
 SAMPLE_ARTIFACT_PRODUCER = {
     "notebook": "tutorials/tabiclv2_classifier_colab.ipynb (default path: MAGIC Gamma Telescope sample)",
     "commit": "383ca046184b2a3aead0c9dd94503338bfbd1253",
     "run": "recorded hosted Colab T4 run; the release notes of the tag name the run record (SART8)",
     "release_tag": SAMPLE_ARTIFACT_TAG,
+    "reissue": "bundle format v2 re-issue of that run's v1 export (release sample-artifact-magic-v1) at code commit c294fcb; not a new run",
 }
-# The re-issued sample artifact (v2 bundle layout: checkpoints/best.safetensors, the converted base). Built from the v1 ZIP
-# with byte-identical training context and a recorded `reissue` block; staged for release, NOT yet published. Until
-# the tag is published, the default above stays on v1 (a deprecated v1 bundle, read with weights_only=True); switching is
-# replacing the three SAMPLE_ARTIFACT_* values above with these and the producer record.
-SAMPLE_ARTIFACT_V2_TAG = "sample-artifact-magic-v2"
-SAMPLE_ARTIFACT_V2_SHA256 = "9694e374c5177e84244575b25fa14a858dd853eff59285b9c44f4a5e2c253579"
+# The superseded v1 sample artifact (deprecated v1 layout, checkpoints/best.ckpt). It stays published and readable through
+# the legacy path (torch.load(weights_only=True), DeprecationWarning) when given as your own artifact; it is not the default.
+SAMPLE_ARTIFACT_V1_TAG = "sample-artifact-magic-v1"
+SAMPLE_ARTIFACT_V1_SHA256 = "2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c"
 SAMPLE_ARTIFACT_MAX_BYTES = 512 * 1024 * 1024  # a download larger than this is refused before it is hashed or opened
 EXTERNAL_DIR = "external_artifact"  # under outputs/: the section's predictions and provenance (XAS6)
 EXTERNAL_SAMPLE_ROWS = 8
