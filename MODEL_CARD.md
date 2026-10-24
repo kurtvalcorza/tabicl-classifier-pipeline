@@ -35,7 +35,7 @@ Both pipeline implementations provide ready-to-run interactive Google Colab note
 
 - **End-to-End Pipeline Tutorial**:  
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_colab.ipynb) [`tabiclv2_classifier_colab.ipynb`](https://github.com/kurtvalcorza/tabicl-classifier-pipeline/blob/main/tutorials/tabiclv2_classifier_colab.ipynb)  
-  *Acquire the pinned TabICLv2 classification checkpoint, validate your own labelled table, evaluate in-context classification on a held-out split, optionally fine-tune on a GPU, and export a serving bundle carrying checkpoint and training context. Its closing section loads a pinned serving artifact made by an earlier recorded run, verifies it before deserialization, rebuilds the in-context estimator and predicts class labels for new rows (this replaced the separate artifact-inference tutorial under Notebook Spec 3.0).*
+  *Acquire the pinned TabICLv2 classification checkpoint, validate your own labelled table, evaluate in-context classification on a held-out split, optionally fine-tune on a GPU, and export a serving bundle carrying checkpoint and training context. Its closing section loads a pinned serving artifact made by an earlier recorded run (release `sample-artifact-magic-v2`, a `tabicl-dimer-classifier-v2` bundle re-issued from that run's v1 export), verifies it before deserialization, rebuilds the in-context estimator and predicts class labels for new rows (this replaced the separate artifact-inference tutorial under Notebook Spec 3.0).*
 
 
 ### TabICLv2 Regressor (`tabicl-regressor-pipeline`)
