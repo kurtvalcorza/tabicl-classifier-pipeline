@@ -120,7 +120,9 @@ NOTEBOOKS = {
             '"baseCheckpoint": P.BASE_CHECKPOINT_NAME',
             '"baseModelSha256": P.BASE_MODEL_SHA256',
             'metrics = {"selectionMetric": cond["eval_metric"], "pretrainedHoldout": cond["pretrained_holdout"], "fineTunedHoldout": cond["candidate_holdout"]',
-            '"payloadFiles": ["checkpoints/best.ckpt", "training_context.parquet"]',
+            '"payloadFiles": [P.BUNDLE_CHECKPOINT, "training_context.parquet"]',
+            '"checkpoint": P.BUNDLE_CHECKPOINT,',
+            "best_facts = P.convert_finetuned_checkpoint(best_pickle)",
             "Trusted digest of this export",
             'SAMPLE_ARTIFACT_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip"',
             'SAMPLE_ARTIFACT_SHA256 = "',
@@ -466,6 +468,7 @@ EXTERNAL_WEIGHT_BYTES: dict[int, str] = {
 EXTERNAL_WEIGHT_DIGESTS: dict[str, str] = {
     "09bc6836d32b92f3f6126b9b15994b353dcf31e039b8c2a64e2c5c9f05b9e917": "CONVERTED_MODEL_SHA256: the served safetensors conversion of the pinned checkpoint (produced locally, not staged from the Hub)",
     "2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c": "the pinned sample artifact of the external-artifact section (release sample-artifact-magic-v1), not a weight file",
+    "9694e374c5177e84244575b25fa14a858dd853eff59285b9c44f4a5e2c253579": "the staged v2 re-issue of the sample artifact (release sample-artifact-magic-v2, not yet published), not a weight file",
 }
 _DIGEST = re.compile(r"(?<![0-9a-fA-F])[0-9a-f]{64}(?![0-9a-fA-F])")
 _GROUPED = r"(\d{1,3}(?:[,\u202f\u00a0 ]\d{3})+|\d+)"

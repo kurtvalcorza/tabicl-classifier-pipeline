@@ -150,9 +150,9 @@ def test_shim_serves_without_torch_load_and_matches_the_ckpt_load(tiny, monkeypa
     assert a.keys() == b.keys() and all(torch.equal(a[k], b[k]) for k in a)
 
 
-def test_a_ckpt_path_still_goes_to_the_upstream_loader(tiny) -> None:
+def test_a_ckpt_path_goes_to_the_deprecated_weights_only_loader(tiny) -> None:
     estimator = P.create_classifier(model_path=tiny["source"], n_estimators=2, random_state=0, device="cpu")
-    assert type(estimator).__name__ == "TabICLClassifier"
+    assert type(estimator).__name__ == "LegacyCheckpointTabICLClassifier"
 
 
 def test_the_finetuner_loads_the_pretrained_weights_through_the_shim(tiny, monkeypatch: pytest.MonkeyPatch) -> None:

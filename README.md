@@ -14,7 +14,7 @@
 
 ## Release status
 
-**Candidate.** **2026-10-24 (safetensors serving):** the E2E notebook blob is now `1868db4e` (code commit `1d705f4`): the base model is served from a pinned safetensors conversion of the checkpoint (`tabicl-classifier-v2-20260212.safetensors`, SHA-256 `09bc6836…`), read once from the digest-verified `.ckpt` with `torch.load(weights_only=True)`. Predictions are identical to the `.ckpt` load on CPU. Its hosted default-path run (reproduction 10) and optional Wine activity run (reproduction 11, a `RUN_ACTIVITY = True` run copy) are recorded: Colab CLI scripted runs on a fresh T4, commit `cc468d5`, 2026-10-24, both PASS, 15/15 code cells, 0 errors, fresh test `matches_record: True`. The `d565b6d` runs named below are history for it (REL14); it stays Candidate until REL12 and REL2 are recorded. Before it, the E2E notebook blob was `95a98e8c` (commit `d565b6d`, PR #35), from the 2026-10-23 refusal-display fix (NOTEBOOK_SPEC 3.0 DAT19/DAT20: a refused user input is shown as one `Refused: <file name>: <rule>` line with no traceback, and the run stops at that cell). Static/unit checks do not constitute clean-runtime notebook evidence. The previous repository-installing pair was executed by CI through real kernels. The E2E blob `947feb16` (commit `9ea0888`) has a hosted Colab T4 run recorded on 2026-10-20: the MAGIC fresh-test evaluation of record, which kept the pretrained model and read "same model (Δ = 0)" (accuracy 0.8993, Wilson 95 % 0.8831–0.9136, ROC AUC 0.95; `docs/release-verification.md`). Blobs regenerated after it carry that record, label every fresh-test scoring a reproduction, and need their own hosted runs. The previous E2E blob `95a98e8c` (commit `d565b6d`) has one: a Colab CLI scripted run on a fresh T4 on 2026-10-23 that passed (15/15 code cells, 0 errors) and reproduced the record (reproduction 8). The optional Wine activity has a recorded hosted run of the same blob (a `RUN_ACTIVITY = True` run copy, Colab CLI scripted, fresh T4, 2026-10-23, commit `d565b6d`, PASS, 15/15 code cells; reproduction 9). The runs of the previous blob `515f8954` (`1344dca`) are history (REL14). It stays Candidate until a BYOD run (one input accepted, one refused; REL12) and a browser run of the interactive journeys (REL2) are recorded. Complete `docs/release-verification.md` against the exact release revision before calling either notebook release-grade.
+**Candidate.** **2026-10-24 (bundle format v2):** the current E2E notebook blob is `5e566fa3` (commit `9dd7a58`, code commit `09400db`, PR #37): exported serving bundles carry `checkpoints/best.safetensors` (format `tabicl-dimer-classifier-v2`) and v1 bundles stay readable with a `DeprecationWarning`. Its hosted default-path run (reproduction 12) and optional Wine activity run (reproduction 13, a `RUN_ACTIVITY = True` run copy) are recorded: Colab CLI scripted runs on a fresh T4, 2026-10-24, both PASS, 15/15 code cells, 0 errors, fresh test `matches_record: True`. The `1868db4e` runs described next are history for it (REL14); it stays Candidate until REL12 and REL2 are recorded. **2026-10-24 (safetensors serving):** the E2E notebook blob is now `1868db4e` (code commit `1d705f4`): the base model is served from a pinned safetensors conversion of the checkpoint (`tabicl-classifier-v2-20260212.safetensors`, SHA-256 `09bc6836…`), read once from the digest-verified `.ckpt` with `torch.load(weights_only=True)`. Predictions are identical to the `.ckpt` load on CPU. Its hosted default-path run (reproduction 10) and optional Wine activity run (reproduction 11, a `RUN_ACTIVITY = True` run copy) are recorded: Colab CLI scripted runs on a fresh T4, commit `cc468d5`, 2026-10-24, both PASS, 15/15 code cells, 0 errors, fresh test `matches_record: True`. The `d565b6d` runs named below are history for it (REL14); it stays Candidate until REL12 and REL2 are recorded. Before it, the E2E notebook blob was `95a98e8c` (commit `d565b6d`, PR #35), from the 2026-10-23 refusal-display fix (NOTEBOOK_SPEC 3.0 DAT19/DAT20: a refused user input is shown as one `Refused: <file name>: <rule>` line with no traceback, and the run stops at that cell). Static/unit checks do not constitute clean-runtime notebook evidence. The previous repository-installing pair was executed by CI through real kernels. The E2E blob `947feb16` (commit `9ea0888`) has a hosted Colab T4 run recorded on 2026-10-20: the MAGIC fresh-test evaluation of record, which kept the pretrained model and read "same model (Δ = 0)" (accuracy 0.8993, Wilson 95 % 0.8831–0.9136, ROC AUC 0.95; `docs/release-verification.md`). Blobs regenerated after it carry that record, label every fresh-test scoring a reproduction, and need their own hosted runs. The previous E2E blob `95a98e8c` (commit `d565b6d`) has one: a Colab CLI scripted run on a fresh T4 on 2026-10-23 that passed (15/15 code cells, 0 errors) and reproduced the record (reproduction 8). The optional Wine activity has a recorded hosted run of the same blob (a `RUN_ACTIVITY = True` run copy, Colab CLI scripted, fresh T4, 2026-10-23, commit `d565b6d`, PASS, 15/15 code cells; reproduction 9). The runs of the previous blob `515f8954` (`1344dca`) are history (REL14). It stays Candidate until a BYOD run (one input accepted, one refused; REL12) and a browser run of the interactive journeys (REL2) are recorded. Complete `docs/release-verification.md` against the exact release revision before calling either notebook release-grade.
 
 A DIMER pipeline that fine-tunes [TabICLv2](https://huggingface.co/jingang/TabICL), a pretrained
 tabular foundation model, on your own tabular-classification dataset. You supply a table of rows
@@ -260,7 +260,7 @@ tabicl_classifier/
 ├── artifact.json            complete inference contract (schema, inference block, encoders, digests)
 ├── training_context.parquet the in-context support table used at inference time
 ├── checkpoints/
-│   └── best.ckpt            the fine-tuned TabICLv2 checkpoint
+│   └── best.safetensors     the fine-tuned TabICLv2 weights (bundle format v2; converted from tabicl's best.ckpt)
 ├── evaluation/
 │   └── report.json          validation / optional test metrics
 ├── logs/
@@ -276,7 +276,7 @@ resolved base-model revision, SHA-256, source (`dimer-provided` / `pinned-baked`
 `pinned-download`), and whether the base matched the pinned default (`baseMatchesPinned`).
 
 DIMER resolves every exportable file by the **`artifacts` block** in `result.json`, keyed by a
-`/data`-relative path (`workbench.domain._resolve_result_artifact`). `modelArtifact` (`best.ckpt`)
+`/data`-relative path (`workbench.domain._resolve_result_artifact`). `modelArtifact` (`best.safetensors`, with its `sha256`)
 is **mandatory** — export-to-repository and model-download report *"No model artifact found"*
 without it — and `trainingContext` (`training_context.parquet`) is the second file the in-context
 learner needs at serve time; `manifest`, `evaluationReport`, and `logArtifact` accompany them.
@@ -292,7 +292,7 @@ learner needs at serve time; `manifest`, `evaluationReport`, and `logArtifact` a
     "numClasses": 3, "featureCount": 17, "device": "cuda:0", "mode": "fine-tune"
   },
   "artifacts": {
-    "modelArtifact":    { "path": "fine-tuning/<run_id>/tabicl_classifier/checkpoints/best.ckpt",    "name": "best.ckpt",                "contentType": "application/octet-stream", "sizeBytes": 0 },
+    "modelArtifact":    { "path": "fine-tuning/<run_id>/tabicl_classifier/checkpoints/best.safetensors", "name": "best.safetensors", "contentType": "application/octet-stream", "sizeBytes": 0, "sha256": "…" },
     "trainingContext":  { "path": "fine-tuning/<run_id>/tabicl_classifier/training_context.parquet", "name": "training_context.parquet", "contentType": "application/octet-stream", "sizeBytes": 0 },
     "manifest":         { "path": "fine-tuning/<run_id>/tabicl_classifier/artifact.json",            "name": "artifact.json",            "contentType": "application/json",         "sizeBytes": 0 },
     "evaluationReport": { "path": "fine-tuning/<run_id>/tabicl_classifier/evaluation/report.json",   "name": "report.json",              "contentType": "application/json",         "sizeBytes": 0 },
@@ -317,16 +317,16 @@ fine-tuned checkpoint and the training context**. A fresh-environment loader rec
 exact scored model from `artifact.json` plus its referenced files, then fits and predicts:
 
 ```python
-from tabicl import TabICLClassifier
 import pandas as pd
+from tabicl_classifier_pipeline import serving_classifier_class  # the worker vendors the same shim
 
 ctx = pd.read_parquet("training_context.parquet")
-model = TabICLClassifier(model_path="checkpoints/best.ckpt", allow_auto_download=False)
+model = serving_classifier_class("checkpoints/best.safetensors")(model_path="checkpoints/best.safetensors", allow_auto_download=False)
 model.fit(ctx.drop(columns=[target_column]), ctx[target_column])
 pred = model.predict(X_new)
 ```
 
-The fine-tuner performs this reload-and-predict smoke check against `best.ckpt` before it reports
+The fine-tuner performs this reload-and-predict smoke check against `best.safetensors` (through the shim, `torch.load` refused) before it reports
 success. When the dataset zip includes a `test.csv`, it is scored after fitting and does **not**
 influence checkpoint selection.
 
