@@ -85,6 +85,12 @@ SAMPLE_ARTIFACT_PRODUCER = {
     "run": "recorded hosted Colab T4 run; the release notes of the tag name the run record (SART8)",
     "release_tag": SAMPLE_ARTIFACT_TAG,
 }
+# The re-issued sample artifact (v2 bundle layout: checkpoints/best.safetensors, the converted base). Built from the v1 ZIP
+# with byte-identical training context and a recorded `reissue` block; staged for release, NOT yet published. Until
+# the tag is published, the default above stays on v1 (a deprecated v1 bundle, read with weights_only=True); switching is
+# replacing the three SAMPLE_ARTIFACT_* values above with these and the producer record.
+SAMPLE_ARTIFACT_V2_TAG = "sample-artifact-magic-v2"
+SAMPLE_ARTIFACT_V2_SHA256 = "9694e374c5177e84244575b25fa14a858dd853eff59285b9c44f4a5e2c253579"
 SAMPLE_ARTIFACT_MAX_BYTES = 512 * 1024 * 1024  # a download larger than this is refused before it is hashed or opened
 EXTERNAL_DIR = "external_artifact"  # under outputs/: the section's predictions and provenance (XAS6)
 EXTERNAL_SAMPLE_ROWS = 8
@@ -494,7 +500,9 @@ def stage_weights(run: Run) -> None:
     print({"weights_dir": str(snapshot), "fetched": fetched})
     verified = P.verify_snapshot(snapshot)
     print({"verified_files": len(verified["files"]), "revision": verified["revision"], "sha256": [f["sha256"] for f in verified["files"]]})
-    run.write_state("weights.json", {"snapshot": str(snapshot), "checkpoint": str(snapshot / P.BASE_CHECKPOINT_NAME)})
+    served = P.ensure_converted(snapshot)  # one torch.load(weights_only=True) of the verified source; never again after this
+    print({"served_weights": served.name, "served_sha256": P.sha256_file(served), "pinned": P.CONVERTED_MODEL_SHA256})
+    run.write_state("weights.json", {"snapshot": str(snapshot), "checkpoint": str(snapshot / P.BASE_CHECKPOINT_NAME), "served": str(served)})
 
 
 def stage_data(run: Run) -> None:
@@ -770,8 +778,9 @@ class StepCounter:
 
 
 def run_config(run: Run, P, cfg: dict[str, Any], pipe, enc: dict, train, holdout, *, device: str, seed: int, epochs_cap: int, lr_override: float, base_state: dict) -> dict[str, Any]:
-    """One grid config: fine-tune with early stopping on validation log loss, then re-score its best.ckpt at the inference
-    ensemble size. Records the validation curve, optimizer steps and whether the weights tabicl kept changed."""
+    """One grid config: fine-tune with early stopping on validation log loss, convert tabicl's ``best.ckpt`` (and the last
+    epoch's checkpoint) to safetensors right after training, then re-score ``best.safetensors`` at the inference ensemble
+    size. Records the validation curve, optimizer steps and whether the weights tabicl kept changed. No pickle survives."""
     import time
 
     from tabicl._finetune.data import count_chunks
@@ -803,13 +812,18 @@ def run_config(run: Run, P, cfg: dict[str, Any], pipe, enc: dict, train, holdout
     finally:
         hook.remove()
     seconds = time.perf_counter() - t0
-    best = ft_dir / "best.ckpt"
-    if not best.exists():
+    best_pickle = ft_dir / "best.ckpt"
+    if not best_pickle.exists():
         raise RuntimeError(f"Fine-tuning config {cfg['id']} did not produce best.ckpt")
     steps_per_epoch = count_chunks(len(train), c["max_data_size"])
     epochs_run = max(0, len(curve) - 1)
     epoch_ckpts = sorted(ft_dir.glob("epoch*.ckpt"), key=lambda path: int("".join(ch for ch in path.stem if ch.isdigit()) or 0))
-    last = epoch_ckpts[-1] if epoch_ckpts else None
+    # tabicl writes these with torch.save; each is read once with torch.load(weights_only=True) and replaced by safetensors.
+    best_facts = P.convert_finetuned_checkpoint(best_pickle)
+    best = Path(best_facts["path"])
+    last = Path(P.convert_finetuned_checkpoint(epoch_ckpts[-1])["path"]) if epoch_ckpts else None
+    for checkpoint in epoch_ckpts[:-1]:
+        checkpoint.unlink()  # TabICL writes one 331 MB checkpoint per epoch; only the last is read out below
     candidate = from_checkpoint(run, best, pipe, "fine-tuned")
     candidate.fit(train[enc["features"]], train[enc["target"]])
     candidate_val = score(P, candidate, holdout, enc)
@@ -820,12 +834,12 @@ def run_config(run: Run, P, cfg: dict[str, Any], pipe, enc: dict, train, holdout
         final.fit(train[enc["features"]], train[enc["target"]])
         last_val = score(P, final, holdout, enc)
         delta_last = param_delta_l2(base_state, model_state(final))
-    for checkpoint in epoch_ckpts:
-        checkpoint.unlink()  # keep best.ckpt only: TabICL writes one 331 MB checkpoint per epoch
-    record = {"id": cfg["id"], "role": cfg["role"], "learning_rate": lr, "lr_schedule": "constant (no warmup, so no zero-LR step)", "epochs_requested": epochs, "epochs_run": epochs_run, "patience": cfg["patience"], "steps_per_epoch": steps_per_epoch, **counter.record(epochs_run * steps_per_epoch), "optimizer_steps": counter.taken, "nonzero_lr_steps": counter.taken, "baseline_val_log_loss": curve[0] if curve else None, "val_log_loss_per_epoch": curve[1:], "weights_changed": delta_best > 0.0, "param_delta_l2_best": delta_best, "param_delta_l2_last_epoch": delta_last, "candidate_val": candidate_val, "last_epoch_val_exploratory": last_val, "best_ckpt": str(best), "best_ckpt_sha256": sha256_file(best), "seconds": round(seconds, 1), "complete": True}
+    if last is not None:
+        last.unlink()  # keep best.safetensors only
+    record = {"id": cfg["id"], "role": cfg["role"], "learning_rate": lr, "lr_schedule": "constant (no warmup, so no zero-LR step)", "epochs_requested": epochs, "epochs_run": epochs_run, "patience": cfg["patience"], "steps_per_epoch": steps_per_epoch, **counter.record(epochs_run * steps_per_epoch), "optimizer_steps": counter.taken, "nonzero_lr_steps": counter.taken, "baseline_val_log_loss": curve[0] if curve else None, "val_log_loss_per_epoch": curve[1:], "weights_changed": delta_best > 0.0, "param_delta_l2_best": delta_best, "param_delta_l2_last_epoch": delta_last, "candidate_val": candidate_val, "last_epoch_val_exploratory": last_val, "best_checkpoint": str(best), "best_checkpoint_sha256": best_facts["converted_sha256"], "best_ckpt_source_sha256": best_facts["source_sha256"], "seconds": round(seconds, 1), "complete": True}
     print({"config": cfg["id"], "role": cfg["role"], "lr": lr, "epochs_run": epochs_run, "optimizer_steps_attempted": record["optimizer_steps_attempted"], "optimizer_steps_taken": record["optimizer_steps_taken"], "amp_skipped_steps": record["amp_skipped_steps"], "baseline_val_log_loss": rounded(record["baseline_val_log_loss"]), "val_log_loss_per_epoch": rounded(curve[1:]), "weights_changed": record["weights_changed"], "param_delta_l2_best": rounded(delta_best, 6), "param_delta_l2_last_epoch": rounded(delta_last, 6), "candidate_val_log_loss": rounded(candidate_val["log_loss"]), "seconds": record["seconds"]})
     if not record["weights_changed"]:
-        print(f"  {cfg['id']}: no epoch beat tabicl's baseline by min_delta {c['min_delta']}, so tabicl restored the pretrained weights and wrote them as best.ckpt (parameter delta 0). The last epoch's weights did move (delta {rounded(delta_last, 6)}); they are only read out on validation below.")
+        print(f"  {cfg['id']}: no epoch beat tabicl's baseline by min_delta {c['min_delta']}, so tabicl restored the pretrained weights and wrote them as best.ckpt, converted to best.safetensors (parameter delta 0). The last epoch's weights did move (delta {rounded(delta_last, 6)}); they are only read out on validation below.")
     return record
 
 
@@ -891,10 +905,10 @@ def stage_condition(run: Run) -> None:
             g["strictly_better_than_pretrained"] = bool(P.compare_metric(g["candidate_val"], pretrained_holdout, "log_loss"))
         fine_tune.update(ran=True, configs=[g["id"] for g in grid])
     chosen, selection = select_config(pretrained_holdout, grid) if grid else (None, "default:pretrained (no grid run)")
-    active_mode, active_checkpoint = ("fine-tuned", chosen["best_ckpt"]) if chosen else ("pretrained", str(pipe.model_path))
+    active_mode, active_checkpoint = ("fine-tuned", chosen["best_checkpoint"]) if chosen else ("pretrained", str(pipe.bundle_checkpoint))
     for g in grid:  # keep the selected checkpoint only; every config's digest stays in the record
         if not chosen or g["id"] != chosen["id"]:
-            Path(g["best_ckpt"]).unlink(missing_ok=True)
+            Path(g["best_checkpoint"]).unlink(missing_ok=True)
     readout = None
     finals = [g for g in grid if g.get("last_epoch_val_exploratory")]
     if finals:
@@ -1264,7 +1278,7 @@ def build_manifest(P, *, enc: dict, classes: list, mode: str, selection: str, me
     """The bundle manifest written by the export stage."""
     return {
         "artifactFormat": P.ARTIFACT_FORMAT,
-        "checkpoint": "checkpoints/best.ckpt",
+        "checkpoint": P.BUNDLE_CHECKPOINT,
         "trainingContext": "training_context.parquet",
         "targetColumn": enc["target"],
         "featureColumns": enc["features"],
@@ -1276,10 +1290,10 @@ def build_manifest(P, *, enc: dict, classes: list, mode: str, selection: str, me
         "mode": mode,
         "selectionBasis": selection,
         "metrics": metrics,
-        "inference": {"class": "TabICLClassifier", "modelPath": "checkpoints/best.ckpt", "nEstimators": n_estimators, "randomState": SEED, "supportManyClasses": True, "allowAutoDownload": False, "decisionRule": P.DECISION_RULE, "categoricalEncoders": enc["encoders"]},
+        "inference": {"class": "TabICLClassifier", "weightsFormat": "safetensors (config in the string metadata; load with create_classifier)", "modelPath": P.BUNDLE_CHECKPOINT, "nEstimators": n_estimators, "randomState": SEED, "supportManyClasses": True, "allowAutoDownload": False, "decisionRule": P.DECISION_RULE, "categoricalEncoders": enc["encoders"]},
         "digests": {"checkpointSha256": checkpoint_facts[0] if checkpoint_facts else sha256_file(checkpoint), "trainingContextSha256": sha256_file(context)},
         "sizes": {"checkpoint": checkpoint_facts[1] if checkpoint_facts else checkpoint.stat().st_size, "trainingContext": context.stat().st_size},
-        "payloadFiles": ["checkpoints/best.ckpt", "training_context.parquet"],
+        "payloadFiles": [P.BUNDLE_CHECKPOINT, "training_context.parquet"],
         "runtime": runtime,
         "notebookSource": source,
     }
@@ -1325,7 +1339,9 @@ def stage_export(run: Run) -> None:
     art = run.out / "artifact"
     shutil.rmtree(art, ignore_errors=True)
     (art / "checkpoints").mkdir(parents=True)
-    ckpt = art / "checkpoints" / "best.ckpt"
+    ckpt = art / P.BUNDLE_CHECKPOINT  # a converted fine-tune or, for "pretrained", the converted base (CONVERTED_MODEL_SHA256)
+    if Path(cond["active_checkpoint"]).suffix != ".safetensors":
+        raise RuntimeError(f"the selected checkpoint {cond['active_checkpoint']} is not a safetensors file; re-run Section 6")
     shutil.copy2(cond["active_checkpoint"], ckpt)
     context = art / "training_context.parquet"
     train[enc["features"] + [enc["target"]]].to_parquet(context, index=False)
@@ -1450,19 +1466,22 @@ def fetch_pinned_artifact(cache: Path, url: str, expected: str) -> Path:
 
 
 def check_bundle_identity(P, manifest: dict[str, Any]) -> dict[str, Any]:
-    """The manifest must declare the pinned base checkpoint; a ``pretrained`` bundle's checkpoint must BE that base
-    checkpoint (``digests.checkpointSha256 == BASE_MODEL_SHA256``), so a swapped, code-capable checkpoint behind a
-    re-hashed manifest is refused (TICA-m2). A ``fine-tuned`` checkpoint is a derivative bound only by the bundle's own
-    digests and the trusted ZIP digest."""
+    """The manifest must declare the pinned base checkpoint; a ``pretrained`` bundle's checkpoint must BE the pinned base:
+    in a v2 bundle the converted base (``digests.checkpointSha256 == CONVERTED_MODEL_SHA256``), in a deprecated v1 bundle
+    the source checkpoint (``== BASE_MODEL_SHA256``), so a swapped checkpoint behind a re-hashed manifest is refused
+    (TICA-m2). A ``fine-tuned`` checkpoint is a derivative bound only by the bundle's own digests and the trusted ZIP digest."""
     declared = (manifest.get("baseCheckpoint"), manifest.get("baseModelRevision"), manifest.get("baseModelSha256"))
     if declared != (P.BASE_CHECKPOINT_NAME, P.MODEL_REVISION, P.BASE_MODEL_SHA256):
         raise RuntimeError(f"Artifact was not produced on the pinned base checkpoint carried by this notebook: declares {declared}, expected {(P.BASE_CHECKPOINT_NAME, P.MODEL_REVISION, P.BASE_MODEL_SHA256)}.")
     mode = manifest.get("mode")
     checkpoint_sha = (manifest.get("digests") or {}).get("checkpointSha256")
     if mode == "pretrained":
-        if checkpoint_sha != P.BASE_MODEL_SHA256:
-            raise RuntimeError(f"The artifact declares mode 'pretrained', so its checkpoint must be the pinned base checkpoint with SHA-256 {P.BASE_MODEL_SHA256}; its manifest records {checkpoint_sha}. Refusing to load a different checkpoint.")
-        return {"mode": mode, "checkpoint_binding": "identical to the pinned base checkpoint (SHA-256 checked)"}
+        legacy = manifest.get("artifactFormat") == P.LEGACY_ARTIFACT_FORMAT
+        expected = P.BASE_MODEL_SHA256 if legacy else P.CONVERTED_MODEL_SHA256
+        if checkpoint_sha != expected:
+            raise RuntimeError(f"The artifact declares mode 'pretrained', so its checkpoint must be the pinned base with SHA-256 {expected}; its manifest records {checkpoint_sha}. Refusing to load a different checkpoint.")
+        what = "the pinned base checkpoint (deprecated v1 pickle layout)" if legacy else "the pinned safetensors conversion of the base"
+        return {"mode": mode, "checkpoint_binding": f"identical to {what} (SHA-256 checked)"}
     if mode == "fine-tuned":
         return {"mode": mode, "checkpoint_binding": "fine-tuned derivative of the pinned base; bound by the manifest digest and the trusted ZIP digest"}
     raise RuntimeError(f"Unsupported artifact mode {mode!r}: expected 'pretrained' or 'fine-tuned'.")

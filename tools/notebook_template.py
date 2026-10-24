@@ -45,7 +45,7 @@ ENVIRONMENT = {
     "package": "tabicl_classifier_pipeline",
     "repo_name": REPO,
     "weights_key": "tabicl-classifier-v2",
-    "modules": ["__init__.py", "api.py"],
+    "modules": ["__init__.py", "api.py", "safetensors_shim.py"],
     "entry_module": "api.py",
     "lock": "tutorials/requirements-colab.lock.txt",
     "managed_python": "3.12.12",
@@ -136,7 +136,7 @@ TEMPLATE = {
     "prerequisites": [
         RUNTIME_PREREQ,
         "- **Knowledge:** basic pandas, what a train/holdout/test split is, and how to read a printed Python dictionary. The metrics, in-context conditioning and fine-tuning are explained where they are first used, and the glossary collects them.",
-        "- **Model file:** one checkpoint, `tabicl-classifier-v2-20260212.ckpt` (110 MB, released under BSD-3-Clause). It is a PyTorch/Lightning checkpoint: `tabicl` deserialises it, so only the digest-verified file is ever loaded.",
+        "- **Model file:** one checkpoint, `tabicl-classifier-v2-20260212.ckpt` (110 MB, released under BSD-3-Clause). It is a PyTorch/Lightning pickle checkpoint, so Section 3 reads the digest-verified file once with `torch.load(weights_only=True)` and converts it to `tabicl-classifier-v2-20260212.safetensors`, whose SHA-256 is pinned; the model is then built from that file's config and loaded from it with `load_state_dict(strict=True)`. Every stage serves the base model from the safetensors file, never from the pickle.",
         "- **Data:** the default sample is the UCI MAGIC Gamma Telescope table (19,020 simulated events, 10 numeric features, two classes, CC BY 4.0) as the repository's pinned split archive: 3,000 support, 1,000 validation and a 1,500-row fresh test, plus a 13,520-row reserve the notebook never reads; it is fetched by immutable commit and its SHA-256 is verified (`examples/sample-data/DATASET_CARD.md`). `Sample: Breast Cancer` (the earlier default, scikit-learn's bundled table) and `Sample: Wine` need no download; `Sample: Palmer Penguins` fetches the repository's pinned CC0 archive. BYOD (one CSV with a label column, or pre-split `train`/`val`/`test` CSVs) is off by default so the sample path runs top to bottom without interaction. The tutorial's own floors are `MIN_TRAIN_ROWS` = 50 support rows and `MIN_EVAL_ROWS` = 2 evaluation rows, with no class ceiling; the production DIMER validator described in the model card is stricter. Do not upload confidential or restricted data to a hosted notebook environment unless you are authorized to do so. Uploaded inputs remain in the notebook runtime; this pipeline does not send them to a third-party inference API.",
     ],
     "guided": {
@@ -192,7 +192,7 @@ TEMPLATE = {
                 "|---|---|---|---|\n"
                 "| 1. Check the runtime | [Engineering] | Linux x86_64, GPU and disk; a run directory | the machine |\n"
                 "| 2. Carry the code, build the environment | [Engineering] | carried files verified; an isolated hash-locked environment | versions |\n"
-                "| 3. Pin, stage and verify the model | [Engineering] | the 110 MB checkpoint downloaded at a fixed revision, digest-checked | identity and digest |\n"
+                "| 3. Pin, stage and verify the model | [Engineering] | the 110 MB checkpoint downloaded at a fixed revision, digest-checked, converted once to pinned safetensors | identity, both digests |\n"
                 "| 4. Load the sample or your own data | [Concept] | the pinned MAGIC split (or your files) | partition sizes, digests, the mask |\n"
                 "| 5. Validate and encode | [Evaluation practice] | input manifest; a refusal probe; encoders; majority baseline | the manifest |\n"
                 "| 6. Condition and fine-tune | [Concept] | pretrained metrics; the pre-registered grid; validation selection | curves, steps, parameter deltas, the selection |\n"
@@ -234,7 +234,7 @@ TEMPLATE = {
                 "| **ROC-AUC (one-vs-rest)** | Ranking quality, threshold-free; for several classes, averaged over one-class-vs-rest problems. |\n"
                 "| **Uncalibrated probability** | A score not guaranteed to match observed frequencies. |\n"
                 "| **Categorical encoder** | Ordinal codes fitted on the support rows only; unseen values get an 'unknown' code and are counted. |\n"
-                "| **Serving bundle** | A ZIP of `artifact.json`, `checkpoints/best.ckpt` and `training_context.parquet`. |\n"
+                "| **Serving bundle** | A ZIP (format `tabicl-dimer-classifier-v2`) of `artifact.json`, `checkpoints/best.safetensors` and `training_context.parquet`. |\n"
                 "| **Digest (SHA-256)** | A fingerprint of a file's bytes. |\n"
                 "| **Hash-locked environment / stage** | The isolated Python environment every stage runs in; one workflow step run as its own process. |\n"
                 "| **BYOD** | Bring Your Own Data. |\n\n"
@@ -378,13 +378,16 @@ TEMPLATE = {
                 "**How tabicl keeps weights.** It measures the validation log loss of the pretrained weights first (the "
                 "*baseline*), then after every epoch. An epoch's weights are kept only if they beat the best value so far by "
                 "`min_delta` (1e-4); after `patience` epochs without improvement it stops and **restores the best state**, which is "
-                "the pretrained weights if no epoch improved, and writes it as `best.ckpt`. The stage prints each config's "
+                "the pretrained weights if no epoch improved, and writes it as `best.ckpt` (a pickle, which the stage converts at once "
+                "to `best.safetensors`; see below). The stage prints each config's "
                 "validation curve, its optimizer steps, and a **parameter delta** (the L2 norm of the weight change): 0 means "
                 "tabicl gave back the pretrained weights. It also reads out the **last epoch's** weights on validation, as a "
                 "disclosed exploratory readout, so you can see what the gradient steps did.\n\n"
-                "TabICL writes one checkpoint per epoch; the stage keeps `best.ckpt` only (of the selected config). A fine-tuned "
-                "`best.ckpt` may remain larger than the base checkpoint because upstream training state is embedded; the format "
-                "is kept for checkpoint compatibility.\n\n"
+                "TabICL writes its checkpoints itself with `torch.save` (`best.ckpt` plus one per epoch). Right after each config "
+                "trains, the stage reads `best.ckpt` and the last epoch's checkpoint once with `torch.load(weights_only=True)`, keeps "
+                "only their `config` and `state_dict` (the optimizer state is dropped) as `best.safetensors`, and deletes every "
+                "`.ckpt`; every later step, the export included, reads the safetensors file only. It keeps `best.safetensors` of "
+                "the selected config only.\n\n"
                 "**Selection (pre-registered, validation only).** The pretrained model is kept unless a config beats its "
                 "validation log loss by more than **0.005**; the fresh test plays no part.\n\n"
                 "**Reproducibility boundary.** The stages set `CUBLAS_WORKSPACE_CONFIG=:4096:8`, `cudnn.deterministic`, no `cudnn.benchmark` "
@@ -402,7 +405,7 @@ TEMPLATE = {
                 "`RUN_FINE_TUNING`, BYOD, another data source or a non-T4 runtime makes the run **exploratory**: validation only, "
                 "and the fresh test is never read. On a CPU runtime the grid is skipped with a printed note.\n\n"
                 "**Predict before running:** will any config beat the pretrained model on validation log loss by more than 0.005? "
-                "What will the parameter delta of `best.ckpt` be if none does?"
+                "What will the parameter delta of `best.safetensors` be if none does?"
             ),
             "code": (
                 "RUN_FINE_TUNING = True  # @param {{type:\"boolean\"}}\n"
@@ -440,7 +443,7 @@ TEMPLATE = {
                 "`weights_changed: False` with a non-zero last-epoch delta: the gradient steps did move the weights, but no epoch's "
                 "weights beat the validation baseline by more than `min_delta` — some were worse, some (like C3 in the CPU "
                 "development run) were within a ten-thousandth of it — so tabicl's early stopping restored the pretrained state and "
-                "wrote it as `best.ckpt`. That is the procedure working as designed: selection on held-out data keeps an adaptation "
+                "wrote it as `best.ckpt` (converted to `best.safetensors`). That is the procedure working as designed: selection on held-out data keeps an adaptation "
                 "only when it measurably helps. A restored config can never be selected as \"fine-tuned\".\n\n"
                 "`weights_changed: True`: some epoch did beat the baseline by more than `min_delta`, and tabicl kept those weights "
                 "(C3 on the hosted T4 run of record is this case). "
@@ -562,7 +565,8 @@ TEMPLATE = {
         {
             "md": (
                 "## 9. Export a DIMER-style serving bundle, then prove a fresh reload · [Engineering]\n\n"
-                "The ZIP carries the minimum serving contract the DIMER pipeline expects: `checkpoints/best.ckpt`, "
+                "The ZIP carries the minimum serving contract the DIMER pipeline expects (bundle format `tabicl-dimer-classifier-v2`): "
+                "`checkpoints/best.safetensors` (the converted fine-tune, or for `pretrained` the converted base whose SHA-256 is pinned), "
                 "`training_context.parquet`, and `artifact.json`. The training context is *required*: TabICL is still an in-context "
                 "learner at serve time, so whoever loads the bundle must hand the model the same rows you evaluated with, and the "
                 "context inherits the source data's licensing obligations (MAGIC: CC BY 4.0, attribution required). `artifact.json` "
@@ -662,17 +666,20 @@ TEMPLATE = {
                 "from this repository's GitHub release `sample-artifact-magic-v1` (no account or token). It is the deterministic "
                 "export of a recorded hosted T4 run of this notebook's default path (the MAGIC sample) at commit `383ca04`; the "
                 "release notes name the run record, and the asset is never replaced (a changed artifact gets a new tag). The stage "
-                "prints the URL, the pinned SHA-256, the producer and the format `tabicl-dimer-classifier-v1` **before** it "
+                "prints the URL, the pinned SHA-256, the producer and the format (this pinned asset is a `tabicl-dimer-classifier-v1` "
+                "bundle; its re-issue in the v2 layout is staged as `sample-artifact-magic-v2`) **before** it "
                 "downloads anything, then refuses the file unless its SHA-256 equals the pinned value. Only then does "
                 "`safe_extract_zip` copy the members one by one (no absolute paths, `..`, symlinks or oversize archives); "
                 "`validate_artifact_runtime` checks the format and the `tabicl`/`torch` versions; the manifest must name the pinned "
                 "base checkpoint; `verify_artifact_bundle` checks the member allowlist, sizes and digests; and the manifest's "
                 "features, target and class labels must equal the MAGIC default path's. Any failed check stops the run, and no "
                 "prediction file is written.\n\n"
-                "**Trust boundary.** The artifact's `checkpoints/best.ckpt` is deserialised by `tabicl` (a PyTorch/Lightning "
-                "checkpoint, which can carry code), so loading an artifact means trusting its producer. The pinned SHA-256 binds this "
-                "download to the file the maintainer published; for a `pretrained` artifact the checkpoint must also be, byte for "
-                "byte, the base checkpoint whose digest Section 3 verified. Nothing is deserialised before these checks pass. For a "
+                "**Trust boundary.** A v2 artifact's `checkpoints/best.safetensors` holds tensors and a JSON config only and is "
+                "loaded without `torch.load`. A v1 artifact (such as this pinned asset) carries a pickle `checkpoints/best.ckpt`; that "
+                "layout is deprecated and is read only with `torch.load(weights_only=True)`, with a `DeprecationWarning`. The "
+                "pinned SHA-256 binds this download to the file the maintainer published; for a `pretrained` artifact the checkpoint "
+                "must also be, byte for byte, the pinned base (v2: its safetensors conversion; v1: the source checkpoint Section 3 "
+                "verified). Nothing is deserialised before these checks pass. For a "
                 "`fine-tuned` artifact of your own, the only binding is a digest you received from its producer through a separate "
                 "channel (`EXPECTED_ZIP_SHA256`).\n\n"
                 "**Optional: your own artifact (off by default).** Set `ARTIFACT_SOURCE` to `My own artifact ZIP` and give "

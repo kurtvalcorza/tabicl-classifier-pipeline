@@ -9,7 +9,7 @@ This record applies to the release-grade tutorials in `tutorials/` as they stood
 
 ## Applicable SHOULD deviations
 
-- **SEC8 — per-file digest and size verification:** new tutorial-produced bundles record and verify both SHA-256 and byte size for `checkpoints/best.ckpt` and `training_context.parquet`. Existing `tabicl-dimer-classifier-v1` bundles produced by the current DIMER fine-tuner record SHA-256 but may omit byte sizes. The companion preserves compatibility by warning when the `sizes` block is absent while still enforcing the whole-archive expanded-size ceiling and component digests.
+- **SEC8 — per-file digest and size verification:** new tutorial-produced bundles record and verify both SHA-256 and byte size for `checkpoints/best.safetensors` (bundle format v2; `checkpoints/best.ckpt` in deprecated v1 bundles) and `training_context.parquet`. Existing `tabicl-dimer-classifier-v1` bundles produced by the current DIMER fine-tuner record SHA-256 but may omit byte sizes. The companion preserves compatibility by warning when the `sizes` block is absent while still enforcing the whole-archive expanded-size ceiling and component digests.
 - **SEC9 — reject unexpected unlisted files:** current DIMER fine-tuner output can include side artifacts such as `evaluation/report.json` beside the three serving files, but `artifact.json` does not enumerate those sidecars. The companion therefore warns on unlisted files rather than rejecting them. Required serving files remain manifest-bound and digest-verified.
 
 These deviations are retained specifically for compatibility with the existing DIMER v1 producer contract; they do not weaken traversal/symlink/containment checks or the checkpoint deserialization trust boundary.

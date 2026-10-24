@@ -31,7 +31,7 @@ BUILD_BACKEND_PIN = "setuptools==78.1.0"
 CHECKPOINT_NAME = "tabicl-classifier-v2-20260212.ckpt"
 MODEL_REVISION = "4dcd344ece2c00be9e831fdd35bed57b5ad83e19"
 CHECKPOINT_SHA256 = "bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0"
-ARTIFACT_FORMAT = "tabicl-dimer-classifier-v1"
+ARTIFACT_FORMAT = "tabicl-dimer-classifier-v2"
 
 
 def require(condition: bool, message: str) -> None:
@@ -163,7 +163,7 @@ require("MIN_SELECTION_HOLDOUT_ROWS = 50" in main_own, "selection evidence guard
 # Model / task provenance and semantics.
 for marker in (CHECKPOINT_NAME, MODEL_REVISION, CHECKPOINT_SHA256, ARTIFACT_FORMAT):
     require(marker in main_all, f"main missing provenance marker {marker!r}")
-for marker in ('"artifactFormat": P.ARTIFACT_FORMAT', "training_context.parquet", "checkpoints/best.ckpt", "artifact.json", "RUN_NEW_DATA_INFERENCE = False  # @param"):
+for marker in ('"artifactFormat": P.ARTIFACT_FORMAT', "training_context.parquet", "P.BUNDLE_CHECKPOINT", "artifact.json", "RUN_NEW_DATA_INFERENCE = False  # @param"):
     require(marker in main_own, f"main code missing {marker!r}")
 for marker in ("classification_metrics(", "majority_class_baseline(", "Need at least {min_classes} target classes", "unseen in training", "trivial baseline"):
     require(marker in main_all, f"classification requirement missing {marker!r}")

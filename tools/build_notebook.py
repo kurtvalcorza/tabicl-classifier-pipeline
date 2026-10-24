@@ -561,9 +561,13 @@ def _infrastructure_md(key: str, ctx: dict[str, Any], template: dict[str, Any]) 
             f"that they agree. `stage_missing_files(..., allow_download=True)` then fetches exactly the absent entries from "
             f"{ctx['host']['name']} **at {ctx['host']['revision_label']} `{ctx['MODEL_REVISION'][:12]}…`** (never `main`, "
             f"~{total_mb:.0f} MB), and `verify_snapshot` re-hashes every file and raises on the first size or digest mismatch. "
-            "There is no fallback to a different download and no remote model code is executed.\n\n"
+            "There is no fallback to a different download and no remote model code is executed. The checkpoint is a pickle, "
+            "so `ensure_converted` then reads the verified file once with `torch.load(weights_only=True)` and writes its "
+            "weights and config as a safetensors file whose SHA-256 must equal the pinned `CONVERTED_MODEL_SHA256`; every "
+            "later stage builds the model from that file and never deserialises the pickle.\n\n"
             "**What to notice:** the model id, revision, licence and file count; `fetched` lists the checkpoint on a first run "
-            "and is empty on a rerun (staging only fetches a missing file); then `verified_files`. A mismatch stops the cell "
+            "and is empty on a rerun (staging only fetches a missing file); then `verified_files`, and `served_sha256` "
+            "equal to `pinned`. A mismatch stops the cell "
             "with an error naming the file — see **Troubleshooting**, and never edit a manifest to get past one."
         )
     raise SystemExit(f"unknown infrastructure cell {key!r}")

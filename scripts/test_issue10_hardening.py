@@ -50,14 +50,15 @@ class Issue10HardeningTests(unittest.TestCase):
 
     def test_non_best_finetune_checkpoints_are_pruned(self):
         main = text(MAIN)
-        self.assertIn("for checkpoint in epoch_ckpts:", main)
+        self.assertIn("for checkpoint in epoch_ckpts[:-1]:", main)
         self.assertIn("checkpoint.unlink()", main)
-        self.assertIn("the stage keeps `best.ckpt` only", main)
+        self.assertIn("It keeps `best.safetensors` of", main)
 
-    def test_finetuned_checkpoint_size_is_documented_without_mutating_checkpoint_format(self):
+    def test_finetuned_checkpoints_are_converted_to_safetensors_and_no_pickle_survives(self):
         main = text(MAIN)
-        self.assertIn("fine-tuned `best.ckpt` may remain larger", main)
-        self.assertIn("checkpoint compatibility", main)
+        self.assertIn("best_facts = P.convert_finetuned_checkpoint(best_pickle)", main)
+        self.assertIn("deletes every", main)
+        self.assertIn("`torch.load(weights_only=True)`", main)
 
     def test_unseen_categories_are_counted_in_the_notebook(self):
         frame = pd.DataFrame({"kind": ["known", "new", None]})

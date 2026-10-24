@@ -35,6 +35,8 @@ jobs:
         run: python tools/validate_release_assets.py
       - name: Standalone notebook parity (PAR3)
         run: python tools/build_notebook.py --check
+      - name: SHA-256 of the safetensors shim the fine-tune worker vendors (re-sync value)
+        run: python tools/print_shim_sha256.py
       - name: Compile tutorial and public API checks
         run: python -m compileall -q scripts src tools
 

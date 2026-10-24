@@ -237,15 +237,16 @@ def test_evaluation_report_sample_sanity_with_baseline_and_independent_test() ->
 def test_safe_extract_zip_and_bundle_verification(tmp_path: Path) -> None:
     src = tmp_path / "bundle"
     (src / "checkpoints").mkdir(parents=True)
-    (src / "checkpoints" / "best.ckpt").write_bytes(b"ckpt-bytes")
+    (src / "checkpoints" / "best.safetensors").write_bytes(b"ckpt-bytes")
     (src / "training_context.parquet").write_bytes(b"pq-bytes")
     manifest = {
-        "checkpoint": "checkpoints/best.ckpt",
+        "artifactFormat": "tabicl-dimer-classifier-v2",
+        "checkpoint": "checkpoints/best.safetensors",
         "trainingContext": "training_context.parquet",
-        "payloadFiles": ["checkpoints/best.ckpt", "training_context.parquet"],
+        "payloadFiles": ["checkpoints/best.safetensors", "training_context.parquet"],
         "sizes": {"checkpoint": 10, "trainingContext": 8},
         "digests": {
-            "checkpointSha256": sha256_file(src / "checkpoints" / "best.ckpt"),
+            "checkpointSha256": sha256_file(src / "checkpoints" / "best.safetensors"),
             "trainingContextSha256": sha256_file(src / "training_context.parquet"),
         },
     }
@@ -257,7 +258,7 @@ def test_safe_extract_zip_and_bundle_verification(tmp_path: Path) -> None:
                 zf.write(path, path.relative_to(src).as_posix())
     root = safe_extract_zip(archive, tmp_path / "out")
     members = verify_artifact_bundle(root, manifest)
-    assert members["checkpoint"] == (root / "checkpoints" / "best.ckpt").resolve()
+    assert members["checkpoint"] == (root / "checkpoints" / "best.safetensors").resolve()
     (root / "stray.txt").write_text("x", encoding="utf-8")
     with pytest.raises(RuntimeError, match="Unexpected or missing artifact files"):
         verify_artifact_bundle(root, manifest)
