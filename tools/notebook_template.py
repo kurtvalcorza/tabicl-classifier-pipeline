@@ -136,7 +136,7 @@ TEMPLATE = {
     "prerequisites": [
         RUNTIME_PREREQ,
         "- **Knowledge:** basic pandas, what a train/holdout/test split is, and how to read a printed Python dictionary. The metrics, in-context conditioning and fine-tuning are explained where they are first used, and the glossary collects them.",
-        "- **Model file:** one checkpoint, `tabicl-classifier-v2-20260212.ckpt` (110 MB, released under BSD-3-Clause). It is a PyTorch/Lightning checkpoint: `tabicl` deserialises it, so only the digest-verified file is ever loaded.",
+        "- **Model file:** one checkpoint, `tabicl-classifier-v2-20260212.ckpt` (110 MB, released under BSD-3-Clause). It is a PyTorch/Lightning pickle checkpoint, so Section 3 reads the digest-verified file once with `torch.load(weights_only=True)` and converts it to `tabicl-classifier-v2-20260212.safetensors`, whose SHA-256 is pinned; the model is then built from that file's config and loaded from it with `load_state_dict(strict=True)`. Every stage serves the base model from the safetensors file, never from the pickle.",
         "- **Data:** the default sample is the UCI MAGIC Gamma Telescope table (19,020 simulated events, 10 numeric features, two classes, CC BY 4.0) as the repository's pinned split archive: 3,000 support, 1,000 validation and a 1,500-row fresh test, plus a 13,520-row reserve the notebook never reads; it is fetched by immutable commit and its SHA-256 is verified (`examples/sample-data/DATASET_CARD.md`). `Sample: Breast Cancer` (the earlier default, scikit-learn's bundled table) and `Sample: Wine` need no download; `Sample: Palmer Penguins` fetches the repository's pinned CC0 archive. BYOD (one CSV with a label column, or pre-split `train`/`val`/`test` CSVs) is off by default so the sample path runs top to bottom without interaction. The tutorial's own floors are `MIN_TRAIN_ROWS` = 50 support rows and `MIN_EVAL_ROWS` = 2 evaluation rows, with no class ceiling; the production DIMER validator described in the model card is stricter. Do not upload confidential or restricted data to a hosted notebook environment unless you are authorized to do so. Uploaded inputs remain in the notebook runtime; this pipeline does not send them to a third-party inference API.",
     ],
     "guided": {
@@ -192,7 +192,7 @@ TEMPLATE = {
                 "|---|---|---|---|\n"
                 "| 1. Check the runtime | [Engineering] | Linux x86_64, GPU and disk; a run directory | the machine |\n"
                 "| 2. Carry the code, build the environment | [Engineering] | carried files verified; an isolated hash-locked environment | versions |\n"
-                "| 3. Pin, stage and verify the model | [Engineering] | the 110 MB checkpoint downloaded at a fixed revision, digest-checked | identity and digest |\n"
+                "| 3. Pin, stage and verify the model | [Engineering] | the 110 MB checkpoint downloaded at a fixed revision, digest-checked, converted once to pinned safetensors | identity, both digests |\n"
                 "| 4. Load the sample or your own data | [Concept] | the pinned MAGIC split (or your files) | partition sizes, digests, the mask |\n"
                 "| 5. Validate and encode | [Evaluation practice] | input manifest; a refusal probe; encoders; majority baseline | the manifest |\n"
                 "| 6. Condition and fine-tune | [Concept] | pretrained metrics; the pre-registered grid; validation selection | curves, steps, parameter deltas, the selection |\n"

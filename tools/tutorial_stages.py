@@ -494,7 +494,9 @@ def stage_weights(run: Run) -> None:
     print({"weights_dir": str(snapshot), "fetched": fetched})
     verified = P.verify_snapshot(snapshot)
     print({"verified_files": len(verified["files"]), "revision": verified["revision"], "sha256": [f["sha256"] for f in verified["files"]]})
-    run.write_state("weights.json", {"snapshot": str(snapshot), "checkpoint": str(snapshot / P.BASE_CHECKPOINT_NAME)})
+    served = P.ensure_converted(snapshot)  # one torch.load(weights_only=True) of the verified source; never again after this
+    print({"served_weights": served.name, "served_sha256": P.sha256_file(served), "pinned": P.CONVERTED_MODEL_SHA256})
+    run.write_state("weights.json", {"snapshot": str(snapshot), "checkpoint": str(snapshot / P.BASE_CHECKPOINT_NAME), "served": str(served)})
 
 
 def stage_data(run: Run) -> None:
@@ -891,7 +893,7 @@ def stage_condition(run: Run) -> None:
             g["strictly_better_than_pretrained"] = bool(P.compare_metric(g["candidate_val"], pretrained_holdout, "log_loss"))
         fine_tune.update(ran=True, configs=[g["id"] for g in grid])
     chosen, selection = select_config(pretrained_holdout, grid) if grid else (None, "default:pretrained (no grid run)")
-    active_mode, active_checkpoint = ("fine-tuned", chosen["best_ckpt"]) if chosen else ("pretrained", str(pipe.model_path))
+    active_mode, active_checkpoint = ("fine-tuned", chosen["best_ckpt"]) if chosen else ("pretrained", str(pipe.bundle_checkpoint))
     for g in grid:  # keep the selected checkpoint only; every config's digest stays in the record
         if not chosen or g["id"] != chosen["id"]:
             Path(g["best_ckpt"]).unlink(missing_ok=True)

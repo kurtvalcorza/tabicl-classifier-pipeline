@@ -164,15 +164,27 @@ def test_from_pretrained_pins_the_verified_weight_file(
 
     monkeypatch.setattr(pipe_mod, "create_classifier", fake_create_classifier)
     root = _snapshot(tmp_path)
+    converted = root / pipe_mod.CONVERTED_CHECKPOINT_NAME
+    conversions: list[tuple[Path, Path]] = []
+
+    def fake_convert(source, destination, **kwargs):
+        conversions.append((Path(source), Path(destination)))
+        Path(destination).write_bytes(b"converted stand-in")
+        return {"converted_sha256": hashlib.sha256(b"converted stand-in").hexdigest()}
+
+    monkeypatch.setattr(pipe_mod, "convert_checkpoint", fake_convert)
+    monkeypatch.setattr(pipe_mod, "CONVERTED_MODEL_SHA256", hashlib.sha256(b"converted stand-in").hexdigest())
     pipe = TabICLClassificationPipeline.from_pretrained(
         weights_dir=root, n_estimators=3, random_state=7, device="cpu"
     )
-    assert Path(pipe.model_path) == root / BASE_CHECKPOINT_NAME
+    assert Path(pipe.model_path) == converted
+    assert pipe.bundle_checkpoint == root / BASE_CHECKPOINT_NAME
+    assert conversions == [(root / BASE_CHECKPOINT_NAME, converted)]
     assert pipe.source == "local-snapshot"
     assert (pipe.n_estimators, pipe.random_state, pipe.device) == (3, 7, "cpu")
     assert calls == [
         {
-            "model_path": root / BASE_CHECKPOINT_NAME,
+            "model_path": converted,
             "n_estimators": 3,
             "random_state": 7,
             "device": "cpu",

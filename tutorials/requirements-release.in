@@ -1,6 +1,7 @@
 # Direct dependency inputs for the release-grade TabICLv2 classifier notebooks.
 # tutorials/requirements-release.lock is generated from this file on Python 3.12.
 tabicl[finetune]==2.1.1
+safetensors==0.8.0
 lightgbm==4.7.0
 pyarrow==25.0.1
 pandas==3.0.5

@@ -36,6 +36,15 @@ BASE_CHECKPOINT_NAME = "tabicl-classifier-v2-20260212.ckpt"
 BASE_MODEL_REVISION = MODEL_REVISION
 BASE_MODEL_SHA256 = "bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0"
 
+# The served weights: a one-time safetensors conversion of the pinned checkpoint (its ``state_dict`` as tensors, its
+# ``config`` as sorted JSON in the string metadata). ``convert_checkpoint`` reads the pickle source once with
+# ``torch.load(weights_only=True)`` and the conversion is byte-reproducible, so its SHA-256 is pinned here. The model
+# is then built from that config and loaded with ``load_state_dict(strict=True)``; nothing deserialises the pickle again.
+CONVERTED_CHECKPOINT_NAME = "tabicl-classifier-v2-20260212.safetensors"
+CONVERTED_MODEL_SHA256 = "09bc6836d32b92f3f6126b9b15994b353dcf31e039b8c2a64e2c5c9f05b9e917"
+CONVERSION_FORMAT = "tabicl-state-dict-safetensors-v1"
+CONFIG_METADATA_KEY = "tabicl_config"
+
 # Operational ceilings the tutorials enforce before any model execution (DAT22).
 MIN_TRAIN_ROWS = 50  # labelled support rows required to condition the classifier
 MIN_EVAL_ROWS = 2  # labelled rows required for a holdout / test partition
@@ -70,10 +79,15 @@ def create_classifier(
     allow_auto_download: bool = False,
     support_many_classes: bool = True,
 ):
-    """Construct the supported TabICLv2 classification serving estimator."""
+    """Construct the supported TabICLv2 classification serving estimator.
+
+    A ``.safetensors`` path (the converted base weights) is served by ``SafetensorsTabICLClassifier``, which builds
+    the network from the file's config and never calls ``torch.load``. Any other path (a fine-tuned ``best.ckpt``
+    or a serving bundle's checkpoint) goes to the upstream estimator, which loads it with ``weights_only=True``."""
     from tabicl import TabICLClassifier
 
-    return TabICLClassifier(
+    estimator_class = safetensors_classifier_class() if Path(model_path).suffix == ".safetensors" else TabICLClassifier
+    return estimator_class(
         model_path=str(model_path),
         allow_auto_download=allow_auto_download,
         n_estimators=n_estimators,
@@ -84,12 +98,141 @@ def create_classifier(
 
 
 def create_finetuned_classifier(**kwargs: Any):
-    """Construct the supported TabICLv2 classification fine-tuning estimator."""
+    """Construct the supported TabICLv2 classification fine-tuning estimator.
+
+    With ``model_path`` on the converted ``.safetensors`` base, the fine-tuner's inner estimator is the
+    ``SafetensorsTabICLClassifier`` shim, so the pretrained weights are read from the safetensors file."""
     from tabicl import FinetunedTabICLClassifier
 
     kwargs.setdefault("allow_auto_download", False)
     kwargs.setdefault("support_many_classes", True)
+    if Path(str(kwargs.get("model_path") or "")).suffix == ".safetensors":
+        return safetensors_finetuned_classifier_class()(**kwargs)
     return FinetunedTabICLClassifier(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Safetensors conversion and the shim that serves it (the pinned tabicl==2.1.1 loads ``.ckpt`` files itself in
+# ``TabICLClassifier._load_model``; the shim overrides only that method).
+# ---------------------------------------------------------------------------
+
+
+def canonical_safetensors(data: bytes) -> bytes:
+    """Re-emit a safetensors header as sorted, compact JSON padded with spaces to 8 bytes; the data is unchanged.
+
+    ``safetensors.torch.save`` (0.8.0) writes ``__metadata__`` in hash-map order, so equal inputs can give different
+    bytes. Tensor offsets are relative to the end of the header, so re-ordering the header keeps them valid."""
+    size = int.from_bytes(data[:8], "little")
+    header = json.loads(data[8 : 8 + size])
+    text = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    text += b" " * (-len(text) % 8)
+    return len(text).to_bytes(8, "little") + text + data[8 + size :]
+
+
+def convert_checkpoint(
+    source: str | Path,
+    destination: str | Path,
+    *,
+    expected_sha256: str | None = None,
+    source_name: str = BASE_CHECKPOINT_NAME,
+) -> dict[str, Any]:
+    """Convert a tabicl ``.ckpt`` to safetensors once; return the source and converted digests.
+
+    The source must match ``expected_sha256`` (default ``BASE_MODEL_SHA256``) before it is read, and is read with
+    ``torch.load(map_location="cpu", weights_only=True)``. The ``state_dict`` tensors are made contiguous CPU clones
+    and the ``config`` is stored as sorted JSON under ``CONFIG_METADATA_KEY``."""
+    import torch
+    from safetensors.torch import save
+
+    source, destination = Path(source), Path(destination)
+    expected = BASE_MODEL_SHA256 if expected_sha256 is None else expected_sha256
+    source_sha = sha256_file(source)
+    if source_sha != expected:
+        raise ValueError(f"{source.name}: sha256 {source_sha} != pinned {expected}; refusing to deserialise it")
+    checkpoint = torch.load(source, map_location="cpu", weights_only=True)
+    if not isinstance(checkpoint, Mapping) or "config" not in checkpoint or "state_dict" not in checkpoint:
+        raise ValueError(f"{source.name}: not a tabicl checkpoint (needs 'config' and 'state_dict')")
+    config = dict(checkpoint["config"])
+    tensors = {key: value.detach().to("cpu").contiguous().clone() for key, value in checkpoint["state_dict"].items()}
+    metadata = {
+        "format": CONVERSION_FORMAT,
+        CONFIG_METADATA_KEY: json.dumps(config, sort_keys=True, separators=(",", ":")),
+        "source_file": source_name,
+        "source_sha256": source_sha,
+    }
+    data = canonical_safetensors(save(tensors, metadata=metadata))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    tmp = destination.with_name(destination.name + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, destination)
+    return {"source_sha256": source_sha, "converted_sha256": hashlib.sha256(data).hexdigest(), "tensors": len(tensors), "bytes": len(data)}
+
+
+def load_converted_network(path: str | Path) -> tuple[Any, dict[str, Any]]:
+    """Build the TabICL network from a converted file's config and load its tensors with ``strict=True``."""
+    from safetensors import safe_open
+    from safetensors.torch import load_file
+    from tabicl._model.tabicl import TabICL
+
+    with safe_open(str(path), framework="pt", device="cpu") as handle:
+        metadata = handle.metadata() or {}
+    if metadata.get("format") != CONVERSION_FORMAT or CONFIG_METADATA_KEY not in metadata:
+        raise ValueError(f"{path}: not a {CONVERSION_FORMAT} file")
+    config = json.loads(metadata[CONFIG_METADATA_KEY])
+    network = TabICL(**config)
+    network.load_state_dict(load_file(str(path), device="cpu"), strict=True)
+    network.eval()
+    return network, config
+
+
+def ensure_converted(path: str | Path | None = None, *, allow_download: bool = False) -> Path:
+    """Return the verified converted weights in a snapshot directory, converting the pinned source if needed.
+
+    A present file whose SHA-256 equals ``CONVERTED_MODEL_SHA256`` is used as is and the source is not read.
+    Otherwise the source is staged if absent (``allow_download``), checked by ``verify_snapshot``, converted once,
+    and the result must equal the pin."""
+    root = Path(path or DEFAULT_WEIGHTS_DIR)
+    target = root / CONVERTED_CHECKPOINT_NAME
+    if target.is_file() and sha256_file(target) == CONVERTED_MODEL_SHA256:
+        return target
+    stage_missing_files(root, allow_download=allow_download)
+    verify_snapshot(root)
+    facts = convert_checkpoint(root / BASE_CHECKPOINT_NAME, target)
+    if facts["converted_sha256"] != CONVERTED_MODEL_SHA256:
+        target.unlink(missing_ok=True)
+        raise ValueError(f"{CONVERTED_CHECKPOINT_NAME}: converted sha256 {facts['converted_sha256']} != pinned {CONVERTED_MODEL_SHA256}")
+    return target
+
+
+_SHIM_CLASSES: dict[str, type] = {}
+
+
+def safetensors_classifier_class() -> type:
+    """``TabICLClassifier`` with ``_load_model`` reading the converted safetensors file named by ``model_path``."""
+    if "classifier" not in _SHIM_CLASSES:
+        from tabicl import TabICLClassifier
+
+        class SafetensorsTabICLClassifier(TabICLClassifier):
+            def _load_model(self) -> None:
+                self.model_path_ = Path(self.model_path)
+                self.model_, self.model_config_ = load_converted_network(self.model_path_)
+
+        _SHIM_CLASSES["classifier"] = SafetensorsTabICLClassifier
+    return _SHIM_CLASSES["classifier"]
+
+
+def safetensors_finetuned_classifier_class() -> type:
+    """``FinetunedTabICLClassifier`` whose inner estimator is the safetensors shim (the pretrained load goes through it)."""
+    if "finetuned" not in _SHIM_CLASSES:
+        from tabicl import FinetunedTabICLClassifier
+
+        class SafetensorsFinetunedTabICLClassifier(FinetunedTabICLClassifier):
+            def _create_inner_estimator(self, *args: Any, **kwargs: Any):
+                inner = super()._create_inner_estimator(*args, **kwargs)
+                return safetensors_classifier_class()(**inner.get_params())
+
+        _SHIM_CLASSES["finetuned"] = SafetensorsFinetunedTabICLClassifier
+    return _SHIM_CLASSES["finetuned"]
 
 
 def fine_tune_classifier(model: Any, X: Any, y: Any, **kwargs: Any) -> Any:
@@ -328,10 +471,11 @@ def stage_missing_files(
 
 
 class TabICLClassificationPipeline:
-    """Serving wrapper: the digest-verified pinned checkpoint behind the upstream ``TabICLClassifier``.
+    """Serving wrapper: the digest-verified safetensors conversion of the pinned checkpoint behind ``TabICLClassifier``.
 
-    ``from_pretrained`` stages and verifies the snapshot and constructs the estimator through
-    ``create_classifier`` (no auto-download); ``fit`` registers the support context (in-context learning,
+    ``from_pretrained`` stages, verifies and converts the snapshot (``ensure_converted``) and constructs the estimator
+    on the converted file through ``create_classifier`` (no auto-download); ``bundle_checkpoint`` names the pinned
+    source ``.ckpt`` a ``pretrained`` serving bundle carries byte-for-byte (the DIMER bundle contract); ``fit`` registers the support context (in-context learning,
     no gradient training), ``predict_proba`` returns finite class probabilities in ``classes_`` order and
     ``predict`` the ``argmax`` label (``DECISION_RULE``; no threshold is shipped).
     """
@@ -345,9 +489,11 @@ class TabICLClassificationPipeline:
         random_state: int,
         device: str,
         source: str = "local-snapshot",
+        bundle_checkpoint: Path | None = None,
     ) -> None:
         self.estimator = estimator
         self.model_path = Path(model_path)
+        self.bundle_checkpoint = Path(bundle_checkpoint) if bundle_checkpoint is not None else self.model_path
         self.n_estimators = n_estimators
         self.random_state = random_state
         self.device = device
@@ -364,16 +510,15 @@ class TabICLClassificationPipeline:
         random_state: int = DEFAULT_RANDOM_STATE,
         device: str | None = None,
     ) -> TabICLClassificationPipeline:
-        """Stage what is missing (at ``MODEL_REVISION``), re-hash every manifest entry, then build the
-        estimator on the verified checkpoint. ``tabicl`` deserialises the checkpoint on the first ``fit``."""
+        """Return the estimator on the converted weights: a present file matching ``CONVERTED_MODEL_SHA256`` is used
+        as is; otherwise the source is staged (at ``MODEL_REVISION``), re-hashed against the manifest and converted
+        once. The network is built from the file's config on the first ``fit``; the pickle source is not read."""
         root = Path(weights_dir or DEFAULT_WEIGHTS_DIR)
-        stage_missing_files(root, allow_download=allow_download)
-        verify_snapshot(root)
+        model_path = ensure_converted(root, allow_download=allow_download)
         if device is None:
             import torch
 
             device = "cuda" if torch.cuda.is_available() else "cpu"
-        model_path = root / BASE_CHECKPOINT_NAME
         estimator = create_classifier(
             model_path=model_path,
             n_estimators=n_estimators,
@@ -387,6 +532,7 @@ class TabICLClassificationPipeline:
             n_estimators=n_estimators,
             random_state=random_state,
             device=device,
+            bundle_checkpoint=root / BASE_CHECKPOINT_NAME,
         )
 
     @property
