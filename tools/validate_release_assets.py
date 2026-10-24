@@ -124,7 +124,7 @@ NOTEBOOKS = {
             '"checkpoint": P.BUNDLE_CHECKPOINT,',
             "best_facts = P.convert_finetuned_checkpoint(best_pickle)",
             "Trusted digest of this export",
-            'SAMPLE_ARTIFACT_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v1/tabiclv2_classifier_artifact.zip"',
+            'SAMPLE_ARTIFACT_URL = "https://github.com/kurtvalcorza/tabicl-classifier-pipeline/releases/download/sample-artifact-magic-v2/tabiclv2_classifier_artifact.zip"',
             'SAMPLE_ARTIFACT_SHA256 = "',
             'EXTERNAL_DIR = "external_artifact"',
             'zip_path = fetch_pinned_artifact(run.root / "inputs" / "external_artifact.zip", SAMPLE_ARTIFACT_URL, SAMPLE_ARTIFACT_SHA256)',
@@ -298,7 +298,7 @@ KERNEL_INSTALL = re.compile(r"['\"]-m['\"]\s*,\s*['\"]pip['\"]|^\s*[%!]\s*pip\b|
 # ST1 / SART6: the only github.com/kurtvalcorza reference allowed anywhere in tutorial code is the exact pinned sample-artifact
 # URL of the external-artifact section, in the stage runner only. It is built here from the tag and compared whole: no prefix
 # match, and a reference holding "..", "%2e" (any case), "?" or "#" is refused even before the comparison.
-SAMPLE_ARTIFACT_TAG = "sample-artifact-magic-v1"
+SAMPLE_ARTIFACT_TAG = "sample-artifact-magic-v2"
 PINNED_SAMPLE_ARTIFACT_URL = f"https://github.com/kurtvalcorza/{REPO_NAME}/releases/download/{SAMPLE_ARTIFACT_TAG}/tabiclv2_classifier_artifact.zip"
 _OWN_REFERENCE = re.compile(r"github\.com/kurtvalcorza", re.I)
 _REFERENCE_STOP = set(" \t\r\n'\"`<>()[]{},;\\")
@@ -467,8 +467,8 @@ EXTERNAL_WEIGHT_BYTES: dict[int, str] = {
 }
 EXTERNAL_WEIGHT_DIGESTS: dict[str, str] = {
     "09bc6836d32b92f3f6126b9b15994b353dcf31e039b8c2a64e2c5c9f05b9e917": "CONVERTED_MODEL_SHA256: the served safetensors conversion of the pinned checkpoint (produced locally, not staged from the Hub)",
-    "2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c": "the pinned sample artifact of the external-artifact section (release sample-artifact-magic-v1), not a weight file",
-    "9694e374c5177e84244575b25fa14a858dd853eff59285b9c44f4a5e2c253579": "the staged v2 re-issue of the sample artifact (release sample-artifact-magic-v2, not yet published), not a weight file",
+    "9694e374c5177e84244575b25fa14a858dd853eff59285b9c44f4a5e2c253579": "the pinned sample artifact of the external-artifact section (release sample-artifact-magic-v2, the bundle-format-v2 re-issue of v1), not a weight file",
+    "2dc82d55161382602fa7a5d1e217e3a33b6c6188ba6ddf4f7ff6b087bf67114c": "the superseded v1 sample artifact (release sample-artifact-magic-v1), not a weight file",
 }
 _DIGEST = re.compile(r"(?<![0-9a-fA-F])[0-9a-f]{64}(?![0-9a-fA-F])")
 _GROUPED = r"(\d{1,3}(?:[,\u202f\u00a0 ]\d{3})+|\d+)"
