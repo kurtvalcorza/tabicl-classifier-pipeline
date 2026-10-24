@@ -141,14 +141,14 @@ def convert_checkpoint(
     The source must match ``expected_sha256`` (default ``BASE_MODEL_SHA256``) before it is read, and is read with
     ``torch.load(map_location="cpu", weights_only=True)``. The ``state_dict`` tensors are made contiguous CPU clones
     and the ``config`` is stored as sorted JSON under ``CONFIG_METADATA_KEY``."""
-    import torch
-    from safetensors.torch import save
-
     source, destination = Path(source), Path(destination)
     expected = BASE_MODEL_SHA256 if expected_sha256 is None else expected_sha256
     source_sha = sha256_file(source)
     if source_sha != expected:
         raise ValueError(f"{source.name}: sha256 {source_sha} != pinned {expected}; refusing to deserialise it")
+    import torch
+    from safetensors.torch import save
+
     checkpoint = torch.load(source, map_location="cpu", weights_only=True)
     if not isinstance(checkpoint, Mapping) or "config" not in checkpoint or "state_dict" not in checkpoint:
         raise ValueError(f"{source.name}: not a tabicl checkpoint (needs 'config' and 'state_dict')")
