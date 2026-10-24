@@ -178,7 +178,7 @@ def test_from_pretrained_pins_the_verified_weight_file(
         weights_dir=root, n_estimators=3, random_state=7, device="cpu"
     )
     assert Path(pipe.model_path) == converted
-    assert pipe.bundle_checkpoint == root / BASE_CHECKPOINT_NAME
+    assert pipe.bundle_checkpoint == converted  # a pretrained bundle carries the converted base
     assert conversions == [(root / BASE_CHECKPOINT_NAME, converted)]
     assert pipe.source == "local-snapshot"
     assert (pipe.n_estimators, pipe.random_state, pipe.device) == (3, 7, "cpu")

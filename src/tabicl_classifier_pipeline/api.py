@@ -11,6 +11,7 @@ import os
 import shutil
 import stat
 import sys
+import warnings
 import zipfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -19,7 +20,14 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-ARTIFACT_FORMAT = "tabicl-dimer-classifier-v1"
+# Serving-bundle formats. v2 (current) carries the weights as ``checkpoints/best.safetensors``; v1 carried tabicl's pickle
+# ``checkpoints/best.ckpt``. A v1 bundle stays readable until it is re-issued: its checkpoint is read only with
+# ``torch.load(weights_only=True)`` and a ``DeprecationWarning`` (``load_legacy_checkpoint_network``).
+ARTIFACT_FORMAT = "tabicl-dimer-classifier-v2"
+LEGACY_ARTIFACT_FORMAT = "tabicl-dimer-classifier-v1"
+SUPPORTED_ARTIFACT_FORMATS = (ARTIFACT_FORMAT, LEGACY_ARTIFACT_FORMAT)
+BUNDLE_CHECKPOINT = "checkpoints/best.safetensors"
+LEGACY_BUNDLE_CHECKPOINT = "checkpoints/best.ckpt"
 
 # Fleet snapshot identity (DIMER Notebook Specification 1.1, ST3/MOD13). The pinned upstream checkpoint is
 # unchanged; these are the fleet-standard names for the same repository, revision, license and snapshot key.
@@ -81,12 +89,12 @@ def create_classifier(
 ):
     """Construct the supported TabICLv2 classification serving estimator.
 
-    A ``.safetensors`` path (the converted base weights) is served by ``SafetensorsTabICLClassifier``, which builds
-    the network from the file's config and never calls ``torch.load``. Any other path (a fine-tuned ``best.ckpt``
-    or a serving bundle's checkpoint) goes to the upstream estimator, which loads it with ``weights_only=True``."""
-    from tabicl import TabICLClassifier
-
-    estimator_class = safetensors_classifier_class() if Path(model_path).suffix == ".safetensors" else TabICLClassifier
+    A ``.safetensors`` path (the converted base, a converted fine-tune, a v2 bundle's checkpoint) is served by
+    ``SafetensorsTabICLClassifier``, which builds the network from the file's config and never calls ``torch.load``.
+    Any other path is a deprecated pickle checkpoint (a v1 bundle's ``best.ckpt``): ``LegacyCheckpointTabICLClassifier``
+    reads it only with ``torch.load(weights_only=True)`` and emits a ``DeprecationWarning``."""
+    is_safetensors = Path(model_path).suffix == ".safetensors"
+    estimator_class = safetensors_classifier_class() if is_safetensors else legacy_checkpoint_classifier_class()
     return estimator_class(
         model_path=str(model_path),
         allow_auto_download=allow_auto_download,
@@ -185,6 +193,45 @@ def load_converted_network(path: str | Path) -> tuple[Any, dict[str, Any]]:
     return network, config
 
 
+def convert_finetuned_checkpoint(source: str | Path, destination: str | Path | None = None, *, remove_source: bool = True) -> dict[str, Any]:
+    """Convert a ``.ckpt`` that tabicl's fine-tuning loop just wrote (``best.ckpt``/``epoch{N}.ckpt``) to safetensors.
+
+    tabicl 2.1.1 writes its fine-tuning checkpoints itself with ``torch.save`` (``config``, ``state_dict`` and the
+    optimizer/scheduler state). The file is this process's own output, so its observed SHA-256 is the expected one; it is
+    read once with ``torch.load(weights_only=True)``, only ``config`` and ``state_dict`` are kept, and the pickle is
+    removed unless ``remove_source=False``. Returns ``convert_checkpoint``'s facts plus the destination path."""
+    source = Path(source)
+    target = Path(destination) if destination is not None else source.with_suffix(".safetensors")
+    facts = convert_checkpoint(source, target, expected_sha256=sha256_file(source), source_name=source.name)
+    if remove_source:
+        source.unlink()
+    return {**facts, "path": str(target)}
+
+
+def load_legacy_checkpoint_network(path: str | Path) -> tuple[Any, dict[str, Any]]:
+    """DEPRECATED: build the network from a v1 pickle checkpoint (``checkpoints/best.ckpt``) for old bundles only.
+
+    Read with ``torch.load(map_location="cpu", weights_only=True)``, never ``weights_only=False``; the network is built
+    from its ``config`` and loaded with ``strict=True``. Kept until the v1 release artifacts are re-issued as v2."""
+    import torch
+    from tabicl._model.tabicl import TabICL
+
+    warnings.warn(
+        f"{Path(path).name}: loading a pickle checkpoint from a {LEGACY_ARTIFACT_FORMAT} bundle (weights_only=True). "
+        f"This layout is deprecated; re-issue the bundle as {ARTIFACT_FORMAT} with {BUNDLE_CHECKPOINT}.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+    if not isinstance(checkpoint, Mapping) or "config" not in checkpoint or "state_dict" not in checkpoint:
+        raise ValueError(f"{path}: not a tabicl checkpoint (needs 'config' and 'state_dict')")
+    config = dict(checkpoint["config"])
+    network = TabICL(**config)
+    network.load_state_dict(checkpoint["state_dict"], strict=True)
+    network.eval()
+    return network, config
+
+
 def ensure_converted(path: str | Path | None = None, *, allow_download: bool = False) -> Path:
     """Return the verified converted weights in a snapshot directory, converting the pinned source if needed.
 
@@ -219,6 +266,20 @@ def safetensors_classifier_class() -> type:
 
         _SHIM_CLASSES["classifier"] = SafetensorsTabICLClassifier
     return _SHIM_CLASSES["classifier"]
+
+
+def legacy_checkpoint_classifier_class() -> type:
+    """DEPRECATED: ``TabICLClassifier`` whose ``_load_model`` reads a v1 pickle checkpoint via ``load_legacy_checkpoint_network``."""
+    if "legacy" not in _SHIM_CLASSES:
+        from tabicl import TabICLClassifier
+
+        class LegacyCheckpointTabICLClassifier(TabICLClassifier):
+            def _load_model(self) -> None:
+                self.model_path_ = Path(self.model_path)
+                self.model_, self.model_config_ = load_legacy_checkpoint_network(self.model_path_)
+
+        _SHIM_CLASSES["legacy"] = LegacyCheckpointTabICLClassifier
+    return _SHIM_CLASSES["legacy"]
 
 
 def safetensors_finetuned_classifier_class() -> type:
@@ -336,13 +397,14 @@ def _base_version(value: str) -> str:
 def validate_artifact_runtime(
     manifest: dict[str, Any],
     *,
-    expected_artifact_format: str = ARTIFACT_FORMAT,
+    expected_artifact_format: str | Sequence[str] = SUPPORTED_ARTIFACT_FORMATS,
     expected_tabicl_version: str = "2.1.1",
     expected_torch_version: str = "2.14.0",
 ) -> dict[str, Any]:
     """Validate and return artifact/runtime provenance before model deserialization."""
-    if manifest.get("artifactFormat") != expected_artifact_format:
-        raise ValueError(f"Unsupported artifactFormat: {manifest.get('artifactFormat')}")
+    accepted = (expected_artifact_format,) if isinstance(expected_artifact_format, str) else tuple(expected_artifact_format)
+    if manifest.get("artifactFormat") not in accepted:
+        raise ValueError(f"Unsupported artifactFormat: {manifest.get('artifactFormat')} (supported: {list(accepted)})")
     if manifest.get("tabiclVersion") != expected_tabicl_version:
         raise ValueError("Artifact TabICL version does not match the supported runtime")
 
@@ -474,8 +536,8 @@ class TabICLClassificationPipeline:
     """Serving wrapper: the digest-verified safetensors conversion of the pinned checkpoint behind ``TabICLClassifier``.
 
     ``from_pretrained`` stages, verifies and converts the snapshot (``ensure_converted``) and constructs the estimator
-    on the converted file through ``create_classifier`` (no auto-download); ``bundle_checkpoint`` names the pinned
-    source ``.ckpt`` a ``pretrained`` serving bundle carries byte-for-byte (the DIMER bundle contract); ``fit`` registers the support context (in-context learning,
+    on the converted file through ``create_classifier`` (no auto-download); ``bundle_checkpoint`` names the file a
+    ``pretrained`` serving bundle carries as ``checkpoints/best.safetensors`` (the converted base, ``CONVERTED_MODEL_SHA256``); ``fit`` registers the support context (in-context learning,
     no gradient training), ``predict_proba`` returns finite class probabilities in ``classes_`` order and
     ``predict`` the ``argmax`` label (``DECISION_RULE``; no threshold is shipped).
     """
@@ -532,7 +594,7 @@ class TabICLClassificationPipeline:
             n_estimators=n_estimators,
             random_state=random_state,
             device=device,
-            bundle_checkpoint=root / BASE_CHECKPOINT_NAME,
+            bundle_checkpoint=model_path,
         )
 
     @property
@@ -1004,9 +1066,29 @@ def manifest_member_path(root: str | Path, value: Any, field: str) -> Path:
     return target
 
 
+def check_bundle_layout(manifest: Mapping[str, Any]) -> str:
+    """The checkpoint member a bundle format allows: v2 names ``BUNDLE_CHECKPOINT`` in ``checkpoint``,
+    ``inference.modelPath`` and ``payloadFiles``; a v1 bundle names a ``.ckpt`` (deprecated, ``weights_only=True`` only).
+    Returns the format; anything else is refused before a checkpoint is opened."""
+    fmt = manifest.get("artifactFormat")
+    checkpoint = str(manifest.get("checkpoint"))
+    model_path = (manifest.get("inference") or {}).get("modelPath")
+    payload = manifest.get("payloadFiles")
+    if fmt == ARTIFACT_FORMAT:
+        if checkpoint != BUNDLE_CHECKPOINT or model_path not in (None, BUNDLE_CHECKPOINT) or (payload is not None and BUNDLE_CHECKPOINT not in payload):
+            raise ValueError(f"{ARTIFACT_FORMAT} bundles carry {BUNDLE_CHECKPOINT} (checkpoint, inference.modelPath, payloadFiles); got checkpoint={checkpoint!r}, modelPath={model_path!r}")
+    elif fmt == LEGACY_ARTIFACT_FORMAT:
+        if Path(checkpoint).suffix != ".ckpt":
+            raise ValueError(f"{LEGACY_ARTIFACT_FORMAT} bundles carry a .ckpt checkpoint; got {checkpoint!r}")
+    else:
+        raise ValueError(f"Unsupported artifactFormat: {fmt} (supported: {list(SUPPORTED_ARTIFACT_FORMATS)})")
+    return fmt
+
+
 def verify_artifact_bundle(root: str | Path, manifest: Mapping[str, Any]) -> dict[str, Path]:
-    """Check an extracted bundle's allowlist, sizes and digests against its manifest; return member paths."""
+    """Check an extracted bundle's layout, allowlist, sizes and digests against its manifest; return member paths."""
     root = Path(root)
+    check_bundle_layout(manifest)
     ckpt = manifest_member_path(root, manifest["checkpoint"], "checkpoint")
     context_path = manifest_member_path(root, manifest["trainingContext"], "trainingContext")
     payload_files = manifest.get("payloadFiles")
